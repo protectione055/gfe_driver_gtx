@@ -51,6 +51,10 @@
 #include "teseo/teseo_real_vtx.hpp"
 #endif
 
+#if defined(HAVE_SORTLEDTON)
+#include "sortledton/sortledton_driver.hpp"
+#endif
+
 using namespace std;
 
 /*****************************************************************************
@@ -179,6 +183,13 @@ std::unique_ptr<Interface> generate_teseo_real_vtx(bool directed_graph){
 
 #endif
 
+#if defined(HAVE_SORTLEDTON)
+std::unique_ptr<Interface> generate_sortledton(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices, int num_threads, int block_size) {
+    return unique_ptr<Interface>{ new SortledtonDriver(is_graph_directed, sparse_graph, max_num_vertices, num_threads, block_size) };
+//    return unique_ptr<Interface>{ nullptr };
+}
+#endif
+
 vector<ImplementationManifest> implementations() {
     vector<ImplementationManifest> result;
 
@@ -235,6 +246,9 @@ vector<ImplementationManifest> implementations() {
     result.emplace_back("teseo-dv.6", "Teseo, dense vertices", &generate_teseo_real_vtx);
 #endif
 
+//#if defined(HAVE_SORTLEDTON)
+//    result.emplace_back("sortledton", "Sortledton", &generate_sortledton);
+//#endif
     return result;
 }
 

@@ -93,6 +93,9 @@ endif
 ifneq (,$(findstring -DHAVE_TESEO,${ALL_CPPFLAGS}))
 	sources += $(addprefix library/teseo/, teseo_driver.cpp teseo_lcc.cpp teseo_real_vtx.cpp)
 endif
+ifneq (,$(findstring -DHAVE_SORTLEDTON,${ALL_CPPFLAGS}))
+	sources += $(addprefix library/sortledton/, sortledton_driver.cpp)
+endif
 
 #############################################################################
 # Helper variables

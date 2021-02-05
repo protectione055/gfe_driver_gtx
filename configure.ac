@@ -519,6 +519,54 @@ if ( test x"${with_graphone}" != x"" && test x"${with_graphone}" != "no" ); then
 fi
 
 #############################################################################
+# Support for the Sortledton
+# Usage:
+# --with-sortledton=/path/to/sortledton/build
+#
+
+AC_ARG_WITH([sortledton], [AS_HELP_STRING([--with-sortledton@<:@=ARG@:>@], [
+    Enable the support to Sortledton. The argument needs to be the path where the library has been built.
+])], [])
+
+if ( test x"${with_sortledton}" != x"" && test x"${with_sortledton}" != "no" ); then
+    if( test x"${with_sortledton}" == x"yes" ); then
+        AC_MSG_ERROR(["the full path to the Sortledton build needs to be specified, e.g. --with-sortledton=/path/to/sortledton/build"]);
+    fi
+
+    MY_LIBEVENT()
+
+    path_sortledton=$(realpath "${with_sortledton}")
+    path_sortledton_library="${path_sortledton}/libsortledton.a"
+    AC_CHECK_FILE([${path_sortledton_library}], [  ],  [ AC_MSG_ERROR([file not found: ${path_sortledton_library}]) ])
+
+    path_sortledton_makefile="${path_sortledton}/Makefile"
+    AC_CHECK_FILE([${path_sortledton_makefile}], [  ],  [ AC_MSG_ERROR(["file not found: ${path_sortledton_makefile}"]) ])
+
+    path_sortledton_includedir=$(realpath "${path_sortledton}/../")
+    AC_MSG_NOTICE([Sortledton include path: ${path_sortledton_includedir}])
+
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_sortledton_includedir} -I${path_sortledton}/include"])
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_sortledton_includedir}/versioning -I${path_sortledton_includedir}/data-structures -I${path_sortledton}/include"])
+    # TODO clean up include structure in sortledton
+    AS_VAR_SET([LIBS], ["-L${path_sortledton} -lsortledton ${LIBS}"])
+
+    # Try to compile a program with Sortledton
+    AC_LINK_IFELSE([
+        AC_LANG_PROGRAM([[
+            @%:@include <versioning/TransactionManager.h>
+        ]], [[
+            TransactionManager tm(1);
+        ]])
+    ], [], [
+        AC_MSG_FAILURE([unable to compile and link an executable with Sortledton])
+    ])
+
+    AC_MSG_NOTICE([Sortledton support enabled])
+    AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_SORTLEDTON"])
+fi
+
+
+#############################################################################
 # Remove extra blanks from our variables
 EXTRA_CPPFLAGS=$(echo ${EXTRA_CPPFLAGS} | xargs)
 CPPFLAGS=$(echo ${CPPFLAGS} | xargs);
