@@ -14,8 +14,6 @@
 
 namespace gfe::library {
 
-    thread_local uint SortledtonDriver::thread_id = 0;
-
     SortledtonDriver::SortledtonDriver(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices,
                                        int num_threads, int block_size) : tm(num_threads), m_is_directed(is_graph_directed) {
       if (is_graph_directed == true) {
@@ -32,11 +30,11 @@ namespace gfe::library {
     }
 
     void SortledtonDriver::on_thread_init(int thread_id) {
-      SortledtonDriver::thread_id = tm.register_thread();
+      tm.register_thread(thread_id);
     }
 
     void SortledtonDriver::on_thread_destroy(int thread_id) {
-      // nop
+      tm.deregister_thread(thread_id);
     }
 
     void SortledtonDriver::dump_ostream(std::ostream &out) const {
@@ -45,17 +43,17 @@ namespace gfe::library {
 
     uint64_t SortledtonDriver::num_edges() const {
       SortledtonDriver* non_const_this = const_cast<SortledtonDriver*>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, thread_id);
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds);
       auto num_edges = tx.edge_count() / 2;
-      non_const_this->tm.transactionCompleted(tx, thread_id);
+      non_const_this->tm.transactionCompleted(tx);
       return num_edges;
     }
 
     uint64_t SortledtonDriver::num_vertices() const {
       SortledtonDriver* non_const_this = const_cast<SortledtonDriver*>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, thread_id);
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds);
       auto num_vertices = tx.vertex_count();
-      non_const_this->tm.transactionCompleted(tx, thread_id);
+      non_const_this->tm.transactionCompleted(tx);
       return num_vertices;
     }
 
@@ -71,9 +69,9 @@ namespace gfe::library {
  */
     double SortledtonDriver::get_weight(uint64_t source, uint64_t destination) const {
       SortledtonDriver* non_const_this = const_cast<SortledtonDriver*>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, thread_id);  // TODO weights currently not supported
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds);  // TODO weights currently not supported
       auto has_edge = tx.has_edge({source, destination});
-      non_const_this->tm.transactionCompleted(tx, thread_id);
+      non_const_this->tm.transactionCompleted(tx);
       return has_edge ? 0.0 : nan("");
     }
 
@@ -96,7 +94,7 @@ namespace gfe::library {
  * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)
  */
     bool SortledtonDriver::add_vertex(uint64_t vertex_id) {
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, thread_id);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
       // TODO add precondition for vertex not existing
 
       bool inserted = true;
@@ -106,7 +104,7 @@ namespace gfe::library {
       } catch (exception& e) {  // TODO develop fault model for adding existing things
         inserted = false;
       }
-      tm.transactionCompleted(tx, thread_id);
+      tm.transactionCompleted(tx);
       return inserted;
     }
 
@@ -125,7 +123,7 @@ namespace gfe::library {
     bool SortledtonDriver::add_edge(gfe::graph::WeightedEdge e) {
       assert(!m_is_directed);
       edge_t internal_edge{e.source(), e.destination()};
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, thread_id);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
 
       VertexExistsPrecondition pre_v1(internal_edge.src);
       tx.register_precondition(&pre_v1);
@@ -144,7 +142,7 @@ namespace gfe::library {
       } catch (exception& e) {
         inserted = false;
       }
-      tm.transactionCompleted(tx, thread_id);
+      tm.transactionCompleted(tx);
       return inserted;
     }
 
@@ -152,7 +150,7 @@ namespace gfe::library {
       assert(!m_is_directed);
       edge_t internal_edge{e.source(), e.destination()};
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, thread_id);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
       tx.use_vertex_does_not_exists_semantics();
 
       EdgeDoesNotExistsPrecondition p(internal_edge);
@@ -170,7 +168,7 @@ namespace gfe::library {
       } catch (EdgeExistsException& e) {
         inserted = false;
       }
-      tm.transactionCompleted(tx, thread_id);
+      tm.transactionCompleted(tx);
       return inserted;
     }
 

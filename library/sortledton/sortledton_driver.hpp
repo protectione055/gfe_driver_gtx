@@ -17,8 +17,6 @@ namespace gfe::library {
         SortledtonDriver &operator=(const SortledtonDriver &) = delete;
 
     protected:
-        static thread_local uint thread_id;
-
         void *m_pImpl; // pointer to the sortleton library
         TransactionManager tm;
         VersioningBlockedSkipListAdjacencyList* ds;
