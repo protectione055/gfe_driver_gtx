@@ -71,6 +71,7 @@ sources := \
 	reader/graphalytics_reader.cpp \
 	reader/graphlog_reader.cpp \
 	reader/metis_reader.cpp \
+	reader/binary_reader.cpp \
 	reader/plain_reader.cpp \
 	reader/reader.cpp \
 	reader/utility.cpp \

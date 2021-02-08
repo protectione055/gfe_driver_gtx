@@ -102,13 +102,11 @@ namespace gfe::library {
  */
     bool SortledtonDriver::add_vertex(uint64_t vertex_id) {
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
-      // TODO add precondition for vertex not existing
-
       bool inserted = true;
       try {
         tx.insert_vertex(vertex_id);
         tx.execute();
-      } catch (exception& e) {  // TODO develop fault model for adding existing things
+      } catch (exception& e) {
         inserted = false;
       }
       tm.transactionCompleted(tx);

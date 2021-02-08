@@ -39,6 +39,8 @@ Format get_graph_format(const char* path) {
             return reader::Format::METIS;
         } else if( strcasecmp(extension, "gr") == 0 || strcasecmp(extension, "dimacs") == 0 || strcasecmp(extension, "dimacs9") == 0 ){
             return reader::Format::DIMACS9;
+        } else if( strcasecmp(extension, "edgeList") == 0 ){
+          return reader::Format::BINARY_EDGE_LOG;
         }
     }
 

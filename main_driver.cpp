@@ -90,7 +90,7 @@ static void run_standalone(int argc, char* argv[]){
         experiment.execute();
         if(configuration().has_database()) experiment.save();
 
-        if(configuration().validate_inserts() && impl_upd->can_be_validated()){
+        if(configuration().validate_inserts() && impl_upd->can_be_validated()){  // TODO allow validation for sortledton
             num_validation_errors = validate_updates(impl_upd, stream);
         }
 

@@ -30,6 +30,7 @@ enum class Format {
     PLAIN_WEIGHTED, // Extension .wel, a list with one edge per line: src dst weight
     METIS, // Extension .metis or .graph, METIS v5.1 format
     DIMACS9, // Extension .gr, .dimacs or .dimacs9, DIMACS challenge #9, year 2005-06, url: http://users.diag.uniroma1.it/challenge9/format.shtml#graph
+    BINARY_EDGE_LOG  // Extension .edgeList edges in binary form using 32 bit per identifier, format is <edge_count 64bit><src1 32bit><dst1 32bit><src2 32bit><dst2 32bit>...
 };
 
 

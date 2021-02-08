@@ -23,6 +23,7 @@
 #include "graphlog_reader.hpp"
 #include "metis_reader.hpp"
 #include "plain_reader.hpp"
+#include "binary_reader.hpp"
 
 #undef CURRENT_ERROR_TYPE
 #define CURRENT_ERROR_TYPE ::gfe::reader::ReaderError
@@ -49,6 +50,8 @@ std::unique_ptr<Reader> Reader::open(const std::string& path){
         return make_unique<PlainReader>(path, false);
     case Format::PLAIN_WEIGHTED:
         return make_unique<PlainReader>(path, true);
+    case Format::BINARY_EDGE_LOG:
+        return make_unique<BinaryReader>(path);
     default:
         ERROR("Unrecognised graph format for the file: `" << path << "'");
     }
