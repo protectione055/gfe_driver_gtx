@@ -22,6 +22,7 @@ namespace gfe::library {
       }
       if (sparse_graph == true) { throw std::invalid_argument("Only dense graphs are supported by the front-end."); }
       ds = new VersioningBlockedSkipListAdjacencyList(block_size, tm); // TODO add max_num_vertices as an option to my data structure
+      ds->reserve_vertices(max_num_vertices);
     }
 
     SortledtonDriver::~SortledtonDriver() {
@@ -44,7 +45,7 @@ namespace gfe::library {
     uint64_t SortledtonDriver::num_edges() const {
       SortledtonDriver* non_const_this = const_cast<SortledtonDriver*>(this);
       SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, thread_id);
-      auto num_edges = 0;  // TODO need to add this method.
+      auto num_edges = tx.edge_count();
       non_const_this->tm.transactionCompleted(tx, thread_id);
       return num_edges;
     }
@@ -94,7 +95,18 @@ namespace gfe::library {
  * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)
  */
     bool SortledtonDriver::add_vertex(uint64_t vertex_id) {
-      throw NotImplemented();
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, thread_id);
+      // TODO add precondition for vertex not existing
+
+      bool inserted = true;
+      try {
+        tx.insert_vertex(vertex_id);
+        tx.execute();
+      } catch (exception& e) {  // TODO develop fault model for adding existing things
+        inserted = false;
+      }
+      tm.transactionCompleted(tx, thread_id);
+      return inserted;
     }
 
 /**
@@ -122,12 +134,12 @@ namespace gfe::library {
       tx.register_precondition(&pre_v2);
       EdgeDoesNotExistsPrecondition pre_e(internal_edge);
       tx.register_precondition(&pre_e);
-
+      // test
       bool inserted = true;
       try {
         tx.insert_edge(internal_edge);
-        tx.execute();
-      } catch (EdgeExistsException& e) {
+        inserted &= tx.execute();
+      } catch (exception& e) {
         inserted = false;
       }
       tm.transactionCompleted(tx, thread_id);
