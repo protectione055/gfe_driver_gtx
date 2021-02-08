@@ -19,7 +19,7 @@ namespace gfe::library {
         throw std::invalid_argument("Only undirected graphs are currently supported by the front-end");
       }
       if (sparse_graph == true) { throw std::invalid_argument("Only dense graphs are supported by the front-end."); }
-      ds = new VersioningBlockedSkipListAdjacencyList(block_size, tm); // TODO add max_num_vertices as an option to my data structure
+      ds = new VersioningBlockedSkipListAdjacencyList(block_size, tm);
       ds->reserve_vertices(max_num_vertices);
     }
 
@@ -64,7 +64,11 @@ namespace gfe::library {
  * Returns true if the given vertex is present, false otherwise
  */
     bool SortledtonDriver::has_vertex(uint64_t vertex_id) const {
-      return vertex_id < num_vertices();  // TODO rethink
+      SortledtonDriver* non_const_this = const_cast<SortledtonDriver*>(this);
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds);  // TODO weights currently not supported
+      auto has_vertex = tx.has_vertex(vertex_id);
+      non_const_this->tm.transactionCompleted(tx);
+      return has_vertex;
     }
 
 /**
