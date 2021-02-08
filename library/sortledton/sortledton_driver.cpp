@@ -5,6 +5,7 @@
 #include "sortledton_driver.hpp"
 
 #include <chrono>
+#include <assert.h>
 
 #include "not_implemented.hpp"
 
@@ -45,7 +46,7 @@ namespace gfe::library {
     uint64_t SortledtonDriver::num_edges() const {
       SortledtonDriver* non_const_this = const_cast<SortledtonDriver*>(this);
       SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, thread_id);
-      auto num_edges = tx.edge_count();
+      auto num_edges = tx.edge_count() / 2;
       non_const_this->tm.transactionCompleted(tx, thread_id);
       return num_edges;
     }
@@ -119,25 +120,26 @@ namespace gfe::library {
     }
 
 /**
- * Add the given edge in the graph. The implementation does not check whether this edge already exists,
- * adding a new edge always.
- * @return always true when both the source & the destination vertices already exist, false otherwise
+ * Adds a given edge to the graph if both vertices exists already
  */
     bool SortledtonDriver::add_edge(gfe::graph::WeightedEdge e) {
+      assert(!m_is_directed);
       edge_t internal_edge{e.source(), e.destination()};
-      // TODO need to add vertices.
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds, thread_id);
 
-      VertexExistsPrecondition pre_v1(internal_edge.src);  // TODO write this precondition
+      VertexExistsPrecondition pre_v1(internal_edge.src);
       tx.register_precondition(&pre_v1);
       VertexExistsPrecondition pre_v2(internal_edge.dst);
       tx.register_precondition(&pre_v2);
+      // Even in the undirected case, we need to check only for the existence of one edge direction to ensure consistency.
       EdgeDoesNotExistsPrecondition pre_e(internal_edge);
       tx.register_precondition(&pre_e);
+
       // test
       bool inserted = true;
       try {
         tx.insert_edge(internal_edge);
+        tx.insert_edge({internal_edge.dst, internal_edge.src});
         inserted &= tx.execute();
       } catch (exception& e) {
         inserted = false;
@@ -147,20 +149,24 @@ namespace gfe::library {
     }
 
     bool SortledtonDriver::add_edge_v2(gfe::graph::WeightedEdge e) {
+      assert(!m_is_directed);
       edge_t internal_edge{e.source(), e.destination()};
 
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds, thread_id);
+      tx.use_vertex_does_not_exists_semantics();
 
       EdgeDoesNotExistsPrecondition p(internal_edge);
       tx.register_precondition(&p);
 
+      tx.insert_vertex(internal_edge.src);
+      tx.insert_vertex(internal_edge.dst);
+
+      tx.insert_edge({internal_edge.dst, internal_edge.src});
+      tx.insert_edge(internal_edge);
+
       bool inserted = true;
       try {
-        // TODO inserting vertices is a nop currently.
-        tx.insert_vertex(internal_edge.src);
-        tx.insert_vertex(internal_edge.dst);
-        tx.insert_edge(internal_edge);
-        tx.execute();
+        inserted &= tx.execute();
       } catch (EdgeExistsException& e) {
         inserted = false;
       }

@@ -98,12 +98,8 @@ static void sequential(shared_ptr<UpdateInterface> interface, bool edge_deletion
     for(uint64_t i = 1; i < edge_list->max_vertex_id(); i++){
         for(uint64_t j = i +1; j < edge_list->max_vertex_id(); j++){
             if((i + j) % 2 == 0){ // the edge should be present
-              // TODO support correct undirectness semantics
-              if((i + j) % 2 == 0) {
                 ASSERT_TRUE(interface->has_edge(j, i)); // because it's undirected
-              } else {
                 ASSERT_TRUE(interface->has_edge(i, j));
-              }
 
                 uint32_t expected_value = j * 1000 + i;
               // TODO support weights
@@ -219,13 +215,9 @@ static void parallel(shared_ptr<UpdateInterface> interface, uint64_t num_vertice
         for(uint64_t i = thread_id +1; i < edge_list->max_vertex_id(); i += num_threads){
             for(uint64_t j = i +1; j < edge_list->max_vertex_id(); j++){
                 if((i + j) % 2 == 0){ // the edge should be present
-//                  if((i + j) % 2 == 0) {
                     ASSERT_TRUE(interface->has_edge(j, i)); // because it's undirected
-//                  } else {
-//                    ASSERT_TRUE(interface->has_edge(i, j));  // TODO reenable once the I support undirectededness semantics
-//                  }
-//                    ASSERT_TRUE(interface->has_edge(i, j));
-//                    ASSERT_TRUE(interface->has_edge(j, i));
+                    ASSERT_TRUE(interface->has_edge(i, j));
+
                     uint32_t expected_value = j * 1000 + i;
 //                    ASSERT_EQ(interface->get_weight(i, j), expected_value); // TODO support weights
 //                    ASSERT_EQ(interface->get_weight(j, i), expected_value);
