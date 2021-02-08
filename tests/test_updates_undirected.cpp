@@ -371,12 +371,11 @@ TEST(Sortledton, UpdatesUndirected){
 
     // TODO support deletions
     const auto max_vertex = 1024;
-    auto sortledton = make_shared<SortledtonDriver>(/* directed ? */ false, false, max_vertex + 1, 1, 512);
+    auto sortledton = make_shared<SortledtonDriver>(/* directed ? */ false, false, max_vertex + 1, 512);
     sequential(sortledton, false, false, max_vertex);
-    // TODO Deans threading model assumes that each thread has a desnse id assigned and that these can be reused with different threads.
-    sortledton = make_shared<SortledtonDriver>(/* directed ? */ false, false, max_vertex + 1, 20, 512);
+    sortledton = make_shared<SortledtonDriver>(/* directed ? */ false, false, max_vertex + 1, 512);
     parallel(sortledton, 128, 8, false);
-    sortledton = make_shared<SortledtonDriver>(/* directed ? */ false, false, max_vertex + 1, 20, 512);
+    sortledton = make_shared<SortledtonDriver>(/* directed ? */ false, false, max_vertex + 1, 512);
     parallel(sortledton, 1024, 8, false);
 
     parallel_check = false; // global, reset to the default value

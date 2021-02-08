@@ -184,9 +184,8 @@ std::unique_ptr<Interface> generate_teseo_real_vtx(bool directed_graph){
 #endif
 
 #if defined(HAVE_SORTLEDTON)
-std::unique_ptr<Interface> generate_sortledton(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices, int num_threads, int block_size) {
-    return unique_ptr<Interface>{ new SortledtonDriver(is_graph_directed, sparse_graph, max_num_vertices, num_threads, block_size) };
-//    return unique_ptr<Interface>{ nullptr };
+std::unique_ptr<Interface> generate_sortledton(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices, int block_size) {
+    return unique_ptr<Interface>{ new SortledtonDriver(is_graph_directed, sparse_graph, max_num_vertices, block_size) };
 }
 #endif
 
@@ -248,7 +247,7 @@ vector<ImplementationManifest> implementations() {
 
 //#if defined(HAVE_SORTLEDTON)
 //    result.emplace_back("sortledton", "Sortledton", &generate_sortledton);
-//#endif
+//#endif  // TODO activate again
     return result;
 }
 

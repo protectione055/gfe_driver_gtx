@@ -14,8 +14,7 @@
 
 namespace gfe::library {
 
-    SortledtonDriver::SortledtonDriver(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices,
-                                       int num_threads, int block_size) : tm(num_threads), m_is_directed(is_graph_directed) {
+    SortledtonDriver::SortledtonDriver(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices, int block_size) : tm(1), m_is_directed(is_graph_directed) {
       if (is_graph_directed == true) {
         throw std::invalid_argument("Only undirected graphs are currently supported by the front-end");
       }
@@ -27,6 +26,10 @@ namespace gfe::library {
     SortledtonDriver::~SortledtonDriver() {
       delete ds;
       ds = nullptr;
+    }
+
+    void SortledtonDriver::on_main_init(int num_threads) {
+      tm.reset_max_threads(num_threads);
     }
 
     void SortledtonDriver::on_thread_init(int thread_id) {

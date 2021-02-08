@@ -25,7 +25,7 @@ namespace gfe::library {
 
     public:
 
-        SortledtonDriver(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices, int num_threads, int block_size);
+        SortledtonDriver(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices, int block_size);
 
         /**
          * Destructor
@@ -100,6 +100,8 @@ namespace gfe::library {
          * @return always true when both the source & the destination vertices already exist, false otherwise
          */
         virtual bool remove_edge(gfe::graph::Edge e);
+
+        virtual void on_main_init(int num_threads);
 
         /**
          * Callback, invoked when a thread is created
