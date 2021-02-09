@@ -49,6 +49,9 @@ class WeightedEdgeStream {
     uint64_t m_max_vertex_id { 0 };
     double m_max_weight { 0 };
 
+    // Permute the edges according to the given permutation vector, with indices in 0, ..., num_edges -1
+    void do_permute_edges(uint64_t* permutation);
+
 public:
     /**
      * Load the list of edges from the given file
@@ -82,13 +85,20 @@ public:
     std::unique_ptr<VertexList> vertex_list() const;
 
     // Get the set of vertices present. For each vertex, return the number of outgoing edges attached.
-    std::unique_ptr<cuckoohash_map<uint64_t, uint64_t>> vertex_table() const;
+    std::unique_ptr<libcuckoo::cuckoohash_map<uint64_t, uint64_t>> vertex_table() const;
 
     // Get the max vertex id present
     uint64_t max_vertex_id() const { return m_max_vertex_id; };
 
     // Get the max weight for an edge in the graph
     double max_weight() const { return m_max_weight; }
+
+    // Sort the edge list by <src, dst>
+    void sort();
+    void sort_by_src_dst();
+
+    // Sort the edge list by <dst, src>
+    void sort_by_dst_src();
 };
 
 } // namespace

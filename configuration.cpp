@@ -21,6 +21,7 @@
 #include <cctype> // tolower
 #include <cmath>
 #include <cstdlib>
+#include <omp.h>
 #include <random>
 #include <sstream>
 #include <string>
@@ -89,14 +90,20 @@ Configuration::~Configuration(){
     delete m_database; m_database = nullptr;
 }
 
-void Configuration::initialiase(int argc, char* argv[]){
+void Configuration::initialise(int argc, char* argv[]){
     using namespace cxxopts;
 
     Options options(argv[0], "GFE Driver");
 
     options.add_options("Generic")
+        ("aging_cooloff", "The amount of time to wait idle after the simulation completed in the Aging2 experiment. The purpose is to measure the memory footprint of the test library when no updates are being executed", value<DurationQuantity>())
+        ("aging_memfp", "Whether to measure the memory footprint", value<bool>()->default_value("false"))
+        ("aging_memfp_physical", "Whether to consider the virtual or the physical memory in the memory footprint", value<bool>()->default_value("false"))
+        ("aging_memfp_report", "Whether to log to stdout the memory footprint measurements observed", value<bool>()->default_value("false"))
+        ("aging_memfp_threshold", "Forcedly stop the execution of the aging experiment if the memory footprint of the whole process is above this threshold", value<ComputerQuantity>())
+        ("aging_release_memory", "Whether to release the memory from the driver as the experiment proceeds", value<bool>()->default_value("true"))
         ("aging_step_size", "The step of each recording for the measured progress in the Aging2 experiment. Valid values are 0.1, 0.25, 0.5 and 1.0", value<double>()->default_value("1"))
-        ("aging_timeout", "Force terminating the aging experiment after four hours")
+        ("aging_timeout", "Force terminating the aging experiment after the given amount of time (excl. cool-off time)", value<DurationQuantity>())
         ("blacklist", "Comma separated list of graph algorithms to blacklist and do not execute", value<string>())
         ("build_frequency", "The frequency to build a new snapshot in the aging experiment (default: disabled)", value<DurationQuantity>())
         ("d, database", "Store the current configuration value into the a sqlite3 database at the given location", value<string>())
@@ -106,6 +113,7 @@ void Configuration::initialiase(int argc, char* argv[]){
         ("h, help", "Show this help menu")
         ("latency", "Measure the latency of inserts/updates, report the average, median, std. dev. and 90/95/97/99 percentiles")
         ("l, library", libraries_help_screen(), value<string>())
+        ("load", "Load the graph into the library in one go")
         ("log", "Repeat the log of updates specified in the given file", value<string>())
         ("max_weight", "The maximum weight that can be assigned when reading non weighted graphs", value<double>()->default_value(to_string(max_weight())))
         ("omp", "Maximum number of threads that can be used by OpenMP (0 = do not change)", value<int>()->default_value(to_string(num_threads_omp())))
@@ -113,9 +121,9 @@ void Configuration::initialiase(int argc, char* argv[]){
         ("r, readers", "The number of client threads to use for the read operations", value<int>()->default_value(to_string(num_threads(THREADS_READ))))
         ("seed", "Random seed used in various places in the experiments", value<uint64_t>()->default_value(to_string(seed())))
         ("t, threads", "The number of threads to use for both the read and write operations", value<int>()->default_value(to_string(num_threads(THREADS_TOTAL))))
-        ("timeout", "Set the maximum time for an operation to complete, in seconds", value<uint64_t>()->default_value(to_string(get_timeout_per_operation())))
+        ("timeout", "Set the maximum time for an operation to complete, in seconds", value<uint64_t>()->default_value(to_string(get_timeout_graphalytics())))
         ("u, undirected", "Is the graph undirected? By default, it's considered directed.")
-        ("v, validate", "Whether to validate the output results of the Graphalytics algorithms")
+        ("v, validate", "Whether to validate the output results of the Graphalytics algorithms", value<string>()->implicit_value("<path>"))
         ("w, writers", "The number of client threads to use for the write operations", value<int>()->default_value(to_string(num_threads(THREADS_WRITE))))
     ;
 
@@ -185,7 +193,8 @@ void Configuration::initialiase(int argc, char* argv[]){
         }
 
         set_num_repetitions( result["repetitions"].as<uint64_t>() );
-        set_timeout( result["timeout"].as<uint64_t>() );
+
+        set_timeout_graphalytics( result["timeout"].as<uint64_t>() );
 
         if( result["efe"].count() > 0 )
             set_ef_edges( result["efe"].as<double>() );
@@ -212,6 +221,10 @@ void Configuration::initialiase(int argc, char* argv[]){
             m_library_factory = library_found->m_factory;
         }
 
+        if( result["load"].count() > 0 ){
+            set_load(true);
+        }
+
         if( result["undirected"].count() > 0 ){
             m_graph_directed = false;
         }
@@ -219,6 +232,17 @@ void Configuration::initialiase(int argc, char* argv[]){
         if( result["validate"].count() > 0 ){
             m_validate_inserts = true;
             m_validate_output = true;
+
+            string path_validate_graph = result["validate"].as<string>();
+            if(path_validate_graph !=  "<path>" /* implicit */){
+                if(!common::filesystem::exists(path_validate_graph)){ ERROR("Option --validate=\"" << path_validate_graph << "\", the file does not exist."); }
+
+                auto abs_path_validate = common::filesystem::absolute_path(path_validate_graph);
+                auto abs_path_graph = common::filesystem::absolute_path(result["graph"].as<string>());
+                if(abs_path_validate != abs_path_graph){
+                    m_validate_graph = path_validate_graph;
+                }
+            }
         }
 
         if ( result["omp"].count() > 0 ){
@@ -227,6 +251,30 @@ void Configuration::initialiase(int argc, char* argv[]){
 
         if ( result["aging_step_size"].count() > 0 ){
             set_aging_step_size( result["aging_step_size"].as<double>() );
+        }
+
+        if( result["aging_cooloff"].count() > 0){
+            set_aging_cooloff_seconds( result["aging_cooloff"].as<DurationQuantity>().as<chrono::seconds>().count() );
+        }
+
+        if(result.count("aging_memfp") > 0){
+            m_aging_memfp = result["aging_memfp"].as<bool>();
+        }
+
+        if( result["aging_memfp_physical"].count() > 0 ){
+            m_aging_memfp_physical = result["aging_memfp_physical"].as<bool>();
+        }
+
+        if( result["aging_memfp_threshold"].count() > 0 ){
+            set_aging_memfp_threshold( result["aging_memfp_threshold"].as<ComputerQuantity>() );
+        }
+
+        if(result["aging_memfp_report"].count() > 0){
+            m_aging_memfp_report = result["aging_memfp_report"].as<bool>();
+        }
+
+        if(result["aging_release_memory"].count() > 0){
+            m_aging_release_memory = result["aging_release_memory"].as<bool>();
         }
 
         if( result["blacklist"].count() > 0 ){
@@ -247,7 +295,10 @@ void Configuration::initialiase(int argc, char* argv[]){
         } // blacklist
 
         m_measure_latency = result["latency"].count() > 0;
-        m_timeout_aging2 = result["aging_timeout"].count() > 0;
+
+        if ( result["aging_timeout"].count() > 0 ){
+            set_timeout_aging2( result["aging_timeout"].as<DurationQuantity>().as<chrono::seconds>().count() );
+        }
     } catch ( argument_incorrect_type& e){
         ERROR(e.what());
     }
@@ -321,8 +372,12 @@ void Configuration::set_num_threads_write(int value){
     m_num_threads_write = value;
 }
 
-void Configuration::set_timeout(uint64_t seconds) {
-    m_timeout_seconds = seconds;
+void Configuration::set_timeout_graphalytics(uint64_t seconds) {
+    m_timeout_graphalytics = seconds;
+}
+
+void Configuration::set_timeout_aging2(uint64_t seconds){
+    m_timeout_aging2 = seconds;
 }
 
 void Configuration::set_graph(const std::string& graph){
@@ -333,6 +388,10 @@ void Configuration::set_build_frequency( uint64_t millisecs ){
     m_build_frequency = millisecs;
 }
 
+void Configuration::set_load( bool value ) {
+    m_load = value;
+}
+
 void Configuration::set_aging_step_size( double value ){
     if(value <= 0 || value > 1){
         ERROR("Invalid value for the aging step size. It must be in (0, 1]. Value given: " << value);
@@ -341,6 +400,14 @@ void Configuration::set_aging_step_size( double value ){
         ERROR("Value for the step size currently not supported: " << value << ". Expected a value such as 1/(step size) is an integer");
     }
     m_step_size_recordings = value;
+}
+
+void Configuration::set_aging_cooloff_seconds(uint64_t value){
+    m_aging_cooloff_seconds = value;
+}
+
+void Configuration::set_aging_memfp_threshold(uint64_t bytes){
+    m_aging_memfp_threshold = bytes;
 }
 
 uint64_t Configuration::get_num_recordings_per_ops() const {
@@ -368,8 +435,8 @@ int Configuration::num_threads_omp() const {
     return m_num_threads_omp;
 }
 
-bool Configuration::is_aging2_timeout_set() const {
-    return m_timeout_aging2;
+bool Configuration::is_load() const {
+    return m_load;
 }
 
 std::unique_ptr<library::Interface> Configuration::generate_graph_library() {
@@ -396,11 +463,31 @@ void Configuration::blacklist(gfe::experiment::GraphalyticsAlgorithms& algorithm
     do_blacklist(algorithms.wcc.m_enabled, "wcc");
 }
 
+const std::string& Configuration::get_validation_graph() const {
+    if(m_validate_graph.empty()){
+        return get_path_graph();
+    } else {
+        return m_validate_graph;
+    }
+}
+
 /*****************************************************************************
  *                                                                           *
  *  Save parameters                                                          *
  *                                                                           *
  *****************************************************************************/
+
+// omp_proc_bind_t, translate the typedef in a string
+static string omp_proc_bind_to_string(){
+    switch(omp_get_proc_bind()){
+    case omp_proc_bind_false: return "false"; break;
+    case omp_proc_bind_true: return "true"; break;
+    case omp_proc_bind_master: return "master"; break;
+    case omp_proc_bind_close: return "close"; break;
+    case omp_proc_bind_spread: return "spread"; break;
+    default: return "unknown";
+    }
+}
 
 void Configuration::save_parameters() {
     if(db() == nullptr) ERROR("Path where to store the results not set");
@@ -413,8 +500,14 @@ void Configuration::save_parameters() {
     params.push_back(P("max_weight", to_string(max_weight())));
     params.push_back(P{"seed", to_string(seed())});
     params.push_back(P{"aging", to_string(m_coeff_aging)});
+    params.push_back(P{"aging_cooloff", to_string(get_aging_cooloff_seconds())});
+    params.push_back(P{"aging_memfp", to_string(get_aging_memfp())});
+    params.push_back(P{"aging_memfp_physical", to_string(get_aging_memfp_physical())});
+    params.push_back(P{"aging_memfp_report", to_string(get_aging_memfp_report())});
+    params.push_back(P{"aging_memfp_threshold", to_string(get_aging_memfp_threshold())});
+    params.push_back(P{"aging_release_memory", to_string(get_aging_release_memory())});
     params.push_back(P{"aging_step_size", to_string(get_aging_step_size())});
-    params.push_back(P{"aging_timeout", to_string(is_aging2_timeout_set())});
+    params.push_back(P{"aging_timeout", to_string(get_timeout_aging2())});
     params.push_back(P{"build_frequency", to_string(get_build_frequency())}); // milliseconds
     params.push_back(P{"ef_edges", to_string(get_ef_edges())});
     params.push_back(P{"ef_vertices", to_string(get_ef_vertices())});
@@ -424,9 +517,11 @@ void Configuration::save_parameters() {
     params.push_back(P{"num_threads_omp", to_string(num_threads_omp())});
     params.push_back(P{"num_threads_read", to_string(num_threads(ThreadsType::THREADS_READ))});
     params.push_back(P{"num_threads_write", to_string(num_threads(ThreadsType::THREADS_WRITE))});
-    params.push_back(P{"timeout", to_string(get_timeout_per_operation())});
+    params.push_back(P{"omp_proc_bind", omp_proc_bind_to_string()});
+    params.push_back(P{"timeout", to_string(get_timeout_graphalytics())});
     params.push_back(P{"directed", to_string(is_graph_directed())});
     params.push_back(P{"library", get_library_name()});
+    params.push_back(P{"load", to_string(is_load())});
     if(!get_update_log().empty()) {
         // version 1: uniform distribution
         // version 2: log file, follow the same node degree distribution of the input graph
@@ -437,6 +532,7 @@ void Configuration::save_parameters() {
     params.push_back(P{"role", "standalone"});
     params.push_back(P{"validate_inserts", to_string(validate_inserts())});
     params.push_back(P{"validate_output", to_string(validate_output())});
+    params.push_back(P{"validate_output_graph", get_validation_graph()});
 
     if(!m_blacklist.empty()){
         stringstream ss;
@@ -446,6 +542,14 @@ void Configuration::save_parameters() {
         }
         params.push_back(P{"blacklist", ss.str()});
     }
+
+    CompilerInfo compiler; // detect the compiler used to build this source file
+    string compiler_name = compiler.name();
+    transform(begin(compiler_name), end(compiler_name), begin(compiler_name), ::tolower);
+    params.push_back(P{"compiler", compiler_name});
+    params.push_back(P{"compiler_major", to_string(compiler.major())});
+    params.push_back(P{"compiler_minor", to_string(compiler.minor())});
+    params.push_back(P{"compiler_patch", to_string(compiler.patch())});
 
     sort(begin(params), end(params));
     db()->store_parameters(params);

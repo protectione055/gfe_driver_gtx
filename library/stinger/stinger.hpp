@@ -32,8 +32,7 @@ class Stinger : public virtual UpdateInterface, public virtual GraphalyticsInter
 protected:
     void* m_stinger_graph {nullptr}; // opaque object, container of the handle to the stinger graph
     const bool m_directed; // is the graph directed
-    mutable common::SpinLock m_spin_lock; // sync vertex creations and removals
-    uint64_t m_num_vertices = 0; // number of vertices
+    std::atomic<uint64_t> m_num_vertices = 0; // number of vertices
     uint64_t m_timeout = 0; // available time, in seconds, to complete the computation
 #if !defined(STINGER_USE_INTERNAL_MAPPING)
     cuckoohash_map<uint64_t, int64_t> m_vertex_mappings_e2i; // name mappings (external to internal)
@@ -70,9 +69,9 @@ protected:
      * @param out_external_ids [output] a hash table, where each entry is external_id -> value
      */
     template<typename T>
-    void to_external_ids(const std::vector<T>& internal_ids, cuckoohash_map<uint64_t, T>* out_external_ids);
+    void to_external_ids(const std::vector<T>& internal_ids, libcuckoo::cuckoohash_map<uint64_t, T>* out_external_ids);
     template<typename T>
-    void to_external_ids(const T* __restrict internal_ids, size_t internal_ids_sz, cuckoohash_map<uint64_t, T>* out_external_ids);
+    void to_external_ids(const T* __restrict internal_ids, size_t internal_ids_sz, libcuckoo::cuckoohash_map<uint64_t, T>* out_external_ids);
 
     /**
      * Compute the shortest paths from source to any vertex

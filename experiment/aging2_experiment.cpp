@@ -75,8 +75,16 @@ void Aging2Experiment::set_build_frequency(std::chrono::milliseconds millisecs){
     m_build_frequency = millisecs;
 }
 
+void Aging2Experiment::set_release_memory(bool value){
+    m_release_driver_memory = value;
+}
+
 void Aging2Experiment::set_report_progress(bool value){
     m_report_progress = value;
+}
+
+void Aging2Experiment::set_report_memory_footprint(bool value){
+    m_report_memory_footprint = value;
 }
 
 void Aging2Experiment::set_num_reports_per_ops(uint64_t value){
@@ -88,13 +96,29 @@ void Aging2Experiment::set_measure_latency(bool value){
     m_measure_latency = value;
 }
 
-void Aging2Experiment::set_timeout(bool value){
-    m_has_timeout = value;
+void Aging2Experiment::set_timeout(std::chrono::seconds secs){
+    m_timeout = secs;
 }
 
 void Aging2Experiment::set_worker_granularity(uint64_t value){
     if(value < 1){ INVALID_ARGUMENT("value < 1: " << value); }
     m_worker_granularity = value;
+}
+
+void Aging2Experiment::set_cooloff(std::chrono::seconds secs){
+    m_cooloff = secs;
+}
+
+void Aging2Experiment::set_memfp(bool value){
+    m_memfp = value;
+}
+
+void Aging2Experiment::set_memfp_physical(bool value){
+    m_memfp_physical = value;
+}
+
+void Aging2Experiment::set_memfp_threshold(uint64_t value) {
+    m_memfp_threshold = value;
 }
 
 Aging2Result Aging2Experiment::execute(){

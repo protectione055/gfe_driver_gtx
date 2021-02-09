@@ -32,6 +32,7 @@
 #include "experiment/aging2_experiment.hpp"
 #include "graph/edge_stream.hpp"
 #include "library/interface.hpp"
+#include "utility/memory_usage.hpp"
 #include "aging2_master.hpp"
 #include "configuration.hpp"
 
@@ -210,18 +211,30 @@ void Aging2Worker::main_thread(){
 }
 
 void Aging2Worker::main_execute_updates(){
+    // compute the amount of space used by the vectors in m_updates
+    for(uint64_t i = 0; i < m_updates.size(); i++){
+        if(m_master.parameters().m_memfp_physical){ // physical space
+            m_updates_mem_usage += m_updates[i]->size() * sizeof(gfe::graph::WeightedEdge);
+        } else { // virtual space
+            m_updates_mem_usage += utility::MemoryUsage::get_allocated_space(m_updates[i]->data());
+        }
+    }
+    COUT_DEBUG("Initial memory footprint: " << m_updates_mem_usage << " bytes");
+
     const int64_t num_total_ops = m_master.num_operations_total();
     const bool report_progress = m_master.parameters().m_report_progress;
+    const bool release_memory = m_master.parameters().m_release_driver_memory;
     // reports_per_ops only affects how often a report is saved in the db, not the report to the stdout
     const double reports_per_ops = m_master.parameters().m_num_reports_per_operations;
     int lastset_coeff = 0;
 
-    while( ! m_updates.empty() ){
-        vector<graph::WeightedEdge>* operations = m_updates[0];
+    for(uint64_t i = 0, end = m_updates.size(); i < end; i++){
+        // if we're release the driver's memory, always fetch the first. Otherwise follow the index.
+        vector<graph::WeightedEdge>* operations = m_updates[release_memory ? 0 : i];
 
         uint64_t num_loops = (operations->size() / granularity()) + (operations->size() % granularity() != 0);
         uint64_t start = 0;
-        for(uint64_t i = 0; i < num_loops; i++){
+        for(uint64_t j = 0; j < num_loops; j++){
             uint64_t end = std::min( start + granularity(), operations->size() );
 
             // execute a chunk of updates
@@ -232,7 +245,9 @@ void Aging2Worker::main_execute_updates(){
             // report progress
             if(report_progress && static_cast<int>(100.0 * num_ops_done/num_total_ops) > m_master.m_last_progress_reported){
                 m_master.m_last_progress_reported = 100.0 * num_ops_done/num_total_ops;
-                LOG("[thread: " << ::common::concurrency::get_thread_id() << ", worker_id: " << m_worker_id << "] Progress: " << 100.0 * num_ops_done/num_total_ops << "%");
+                if(!m_master.m_stop_experiment){
+                    LOG("[thread: " << ::common::concurrency::get_thread_id() << ", worker_id: " << m_worker_id << "] Progress: " << static_cast<int>(100.0 * num_ops_done/num_total_ops) << "%");
+                }
             }
 
             // report how long it took to perform 1x, 2x, ... updates w.r.t. to the size of the final graph
@@ -248,9 +263,18 @@ void Aging2Worker::main_execute_updates(){
             start = end;
         }
 
-        COUT_DEBUG("Releasing a buffer of cardinality " << operations->size() << ", " << m_updates.size() -1 << " buffers left");
-        delete m_updates[0];
-        m_updates.pop();
+        if(release_memory){
+            COUT_DEBUG("Releasing a buffer of cardinality " << operations->size() << ", " << m_updates.size() -1 << " buffers left");
+            if(m_master.parameters().m_memfp_physical){
+                m_updates_mem_usage -= m_updates[0]->size() * sizeof(gfe::graph::WeightedEdge); // update the memory footprint of this worker
+            } else { // virtual memory
+                m_updates_mem_usage -= utility::MemoryUsage::get_allocated_space(m_updates[0]->data());
+            }
+
+            COUT_DEBUG("Memory footprint: " << m_updates_mem_usage << " bytes");
+            delete m_updates[0];
+            m_updates.pop();
+        }
     }
 }
 
@@ -345,7 +369,6 @@ void Aging2Worker::graph_insert_edge(graph::WeightedEdge edge){
     if(!m_master.is_directed() && m_uniform(m_random) < 0.5) edge.swap_src_dst(); // noise
     COUT_DEBUG("edge: " << edge);
 
-
     if(with_latency == false){
         // the function returns true if the edge has been inserted. Repeat the loop if it cannot insert the edge as one of
         // the vertices is still being inserted by another thread
@@ -408,6 +431,10 @@ uint64_t Aging2Worker::num_deletions() const {
 
 uint64_t Aging2Worker::num_operations() const {
     return m_num_operations;
+}
+
+uint64_t Aging2Worker::memory_footprint() const {
+    return m_updates_mem_usage;
 }
 
 } // namespace

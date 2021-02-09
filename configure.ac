@@ -1,7 +1,7 @@
 #############################################################################
 # Initialization
 AC_PREREQ([2.69])
-AC_INIT([graph_libs_eval], [0.1])
+AC_INIT([graph_libs_eval], [0.2])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_PRESERVE_HELP_ORDER
 AC_LANG([C++])
@@ -11,10 +11,10 @@ AC_LANG([C++])
 AC_CONFIG_FILES([Makefile])
 
 #############################################################################
-# Set the compiler $CC and $CXX. Prefer clang over gcc
+# Set the compiler $CC and $CXX. Prefer gcc over clang
 old_CFLAGS="${CFLAGS}"; old_CXXFLAGS="${CXXFLAGS}" dnl Do not automatically set -g -O2
-AC_PROG_CC([clang cc gcc icc])
-AC_PROG_CXX([clang++ c++ cxx g++ icpc])
+AC_PROG_CC([gcc clang cc icc])
+AC_PROG_CXX([g++ clang++ c++ cxx icpc])
 CFLAGS="${old_CFLAGS}"; unset old_CFLAGS; CXXFLAGS="${old_CXXFLAGS}"; unset old_CXXFLAGS;
 AX_CXX_COMPILE_STDCXX_17 dnl Ask for C++17, thanks!
 
@@ -92,6 +92,11 @@ AC_DEFUN([MY_LIBEVENT], [
 # pthreads
 AC_SEARCH_LIBS([pthread_create], [pthread], [],
     [ AC_MSG_ERROR([missing prerequisite: this program requires pthreads to work (dependency for sqlite3)]) ])
+    
+#############################################################################
+# linker
+AC_SEARCH_LIBS([dlsym], [dl], [],
+    [ AC_MSG_ERROR([missing prerequisite: this program depends on the dynamic linker (-ldl)]) ])
     
 #############################################################################
 # libnuma
@@ -259,7 +264,7 @@ if ( test x"${with_teseo}" != x"" && test x"${with_teseo}" != "no" ); then
     
     MY_LIBEVENT()
     
-    path_teseo=$(realpath "${with_teseo}") 
+    path_teseo=$(realpath "${with_teseo}")
     path_teseo_library="${path_teseo}/libteseo.a"
     AC_CHECK_FILE([${path_teseo_library}], [  ],  [ AC_MSG_ERROR([file not found: ${path_teseo_library}]) ])
     
@@ -516,6 +521,41 @@ if ( test x"${with_graphone}" != x"" && test x"${with_graphone}" != "no" ); then
     
     AC_MSG_NOTICE([GraphOne support enabled])
     AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_GRAPHONE"])
+fi
+
+
+#############################################################################
+# Support for the GraphOne framework
+# Usage:
+# --with-livegraph=/path/to/livegraph/lib
+#
+AC_ARG_WITH([livegraph], [AS_HELP_STRING([--with-livegraph@<:@=ARG@:>@], [
+    Link to the LiveGraph library. The argument needs to be the path to the dynamic library.
+])], [])
+
+if ( test x"${with_livegraph}" != x"" && test x"${with_livegraph}" != "no" ); then
+    dnl check whether we can compile & link a program that makes usage of omp.h
+    if ( test "${have_openmp}" == "no" ); then
+        AC_MSG_FAILURE([LiveGraph: missing prerequisite header omp.h (OpenMP runtime library)])
+    fi
+    
+    AC_MSG_NOTICE([LiveGraph: checking whether Intel TBB is present in the machine...])
+    MY_INTEL_TBB()
+    
+    if( test x"${with_livegraph}" == x"yes" ); then
+        AC_MSG_ERROR(["the full path to the LiveGraph library needs to be set, e.g. --with-livegraph=/path/to/livegraph/lib"]);
+    fi
+    
+    path_livegraph_library=$(realpath "${with_livegraph}")
+        AC_CHECK_FILE([${path_livegraph_library}], 
+        [ LIBS="-L${path_livegraph_library} -Wl,-rpath=${path_livegraph_library} ${LIBS}" ], 
+        [ AC_MSG_ERROR(["the path does not exist: ${path_livegraph_library}"]) ]
+    )
+    
+    AC_SEARCH_LIBS([_ZN2lg5Graph17begin_transactionEv], [livegraph], [], [ AC_MSG_ERROR([cannot link the library livegraph]) ])
+    
+    AC_MSG_NOTICE([LiveGraph support enabled])
+    AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_LIVEGRAPH"])
 fi
 
 #############################################################################

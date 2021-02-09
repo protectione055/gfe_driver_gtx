@@ -29,6 +29,7 @@
 #include "configuration.hpp"
 #include "graph/edge_stream.hpp"
 #include "library/baseline/adjacency_list.hpp"
+#include "library/baseline/csr.hpp"
 #if defined(HAVE_LLAMA)
 #include "library/llama/llama_class.hpp"
 #include "library/llama/llama_ref.hpp"
@@ -39,9 +40,11 @@
 #if defined(HAVE_GRAPHONE)
 #include "library/graphone/graphone.hpp"
 #endif
+#if defined(HAVE_LIVEGRAPH)
+#include "library/livegraph/livegraph_driver.hpp"
+#endif
 #if defined(HAVE_TESEO)
 #include "library/teseo/teseo_driver.hpp"
-#include "library/teseo/teseo_lcc.hpp"
 #endif
 #include "library/interface.hpp"
 #include "reader/graphalytics_reader.hpp"
@@ -179,6 +182,18 @@ TEST(AdjacencyList, GraphalyticsUndirected){
     auto adjlist = make_unique<AdjacencyList>(/* directed */ false);
     load_graph(adjlist.get(), path_example_undirected);
     validate(adjlist.get(), path_example_undirected);
+}
+
+TEST(CSR, GraphalyticsDirected){
+    auto csr = make_unique<CSR>(/* directed */ true);
+    csr->load(path_example_directed + ".properties");
+    validate(csr.get(), path_example_directed);
+}
+
+TEST(CSR, GraphalyticsUndirected){
+    auto csr = make_unique<CSR>(/* directed */ false);
+    csr->load(path_example_undirected + ".properties");
+    validate(csr.get(), path_example_undirected);
 }
 
 #if defined(HAVE_LLAMA)
@@ -362,6 +377,24 @@ TEST(GraphOneRef, GraphalyticsUndirected){
 }
 #endif
 
+#if defined(HAVE_LIVEGRAPH)
+TEST(LiveGraph, GraphalyticsUndirected){
+    auto graph = make_unique<LiveGraphDriver>(/* directed */ false);
+    load_graph(graph.get(), path_example_undirected);
+    validate(graph.get(), path_example_undirected);
+}
+TEST(LiveGraph, GraphalyticsDirected){
+    auto graph = make_unique<LiveGraphDriver>(/* directed */ true);
+    load_graph(graph.get(), path_example_directed);
+
+    /**
+     * On directed graphs, for LiveGraph we only have an implementation of WCC & SSSP. All the other kernel implementations
+     * rely on the knowledge of incoming edges, which we are not keeping atm.
+     */
+    validate(graph.get(), path_example_directed, GA_WCC | GA_SSSP);
+}
+#endif
+
 #if defined(HAVE_TESEO)
 TEST(Teseo, GraphalyticsUndirected){
     auto graph = make_unique<TeseoDriver>(/* directed */ false);
@@ -369,14 +402,8 @@ TEST(Teseo, GraphalyticsUndirected){
     validate(graph.get(), path_example_undirected);
 }
 
-TEST(TeseoLCC_LowLevelAPI, GraphalyticsUndirected){
-    auto graph = make_unique<TeseoLCC>(/* directed */ false, /* low level api ? */ true);
-    load_graph(graph.get(), path_example_undirected);
-    validate(graph.get(), path_example_undirected, GA_LCC);
-}
-
-TEST(TeseoLCC_UserAPI, GraphalyticsUndirected){
-    auto graph = make_unique<TeseoLCC>(/* directed */ false, /* low level api ? */ false);
+TEST(TeseoLCC, GraphalyticsUndirected){
+    auto graph = make_unique<TeseoDriverLCC>(/* directed */ false);
     load_graph(graph.get(), path_example_undirected);
     validate(graph.get(), path_example_undirected, GA_LCC);
 }

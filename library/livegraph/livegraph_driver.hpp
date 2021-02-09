@@ -17,78 +17,47 @@
 
 #pragma once
 
-#include "common/error.hpp"
-#include "library/interface.hpp"
-
+#include <atomic>
 #include <chrono>
-#include <cinttypes>
-#include <shared_mutex>
-#include <unordered_map>
-#include <vector>
+#include "library/interface.hpp"
 
 namespace gfe::library {
 
-// Generic exception thrown by this class
-DEFINE_EXCEPTION(AdjacencyListError);
-
 /**
- * Sequential and base implementation of the interface, for testing purposes.
- * The class is thread-safe, but all exposed operations are serialised and sequential.
+ * Wrapper to evaluate the LiveGraph library
  */
-class AdjacencyList : public virtual UpdateInterface, public virtual LoaderInterface, public virtual GraphalyticsInterface {
-    using EdgeList = std::vector</* edge */ std::pair< /* destination */ uint64_t,  /* weight */ double>>;
-    using EdgePair = std::pair< /* outgoing edges */ EdgeList, /* incoming edges */ EdgeList >;
-    using NodeList = std::unordered_map</* src vertex */ uint64_t, /* outgoing & incoming edges */ EdgePair>;
-    NodeList m_adjacency_list;
-    uint64_t m_num_edges = 0; // number of directed edges
-    const bool m_is_directed; // whether the graph is directed or not
-    const bool m_is_thread_safe; // whether to protect writes with a latch
+class LiveGraphDriver : public virtual UpdateInterface, public virtual GraphalyticsInterface {
+    LiveGraphDriver(const LiveGraphDriver&) = delete;
+    LiveGraphDriver& operator=(const LiveGraphDriver&) = delete;
 
-    using mutex_t = std::shared_mutex;
-    mutable mutex_t m_mutex; // read-write mutex
-    std::chrono::seconds m_timeout {0}; // enforce a computation to terminate in tot seconds
+protected:
+    void* m_pImpl; // pointer to the LiveGraph handle
+    void* m_pHashMap; // pointer to the TBB HashMap to translate the vertex identifiers into the dense IDs for livegraph
+    const bool m_is_directed; // whether the underlying graph is directed or undirected
+    const bool m_read_only; // whether to used read only transactions for graphalytics
+    std::atomic<uint64_t> m_num_vertices {0}; // keep track of the total number of vertices
+    std::atomic<uint64_t> m_num_edges {0}; // keep track of the total number fo edges
+    std::chrono::seconds m_timeout {0}; // the budget to complete each of the algorithms in the Graphalytics suite
 
-    // Get the list of incoming edges
-    const EdgeList& get_incoming_edges(uint64_t vertex_id) const;
-    const EdgeList& get_incoming_edges(const NodeList::iterator& it) const;
-    const EdgeList& get_incoming_edges(const NodeList::const_iterator& it) const;
-    const EdgeList& get_incoming_edges(const NodeList::mapped_type& adjlist_value) const;
 
-    // Get the degree of the given vertex v, that is | in(v) U out(v) | with U = set union
-    uint64_t get_degree(uint64_t vertex_id) const;
+    // Retrieve the internal vertex ID for the given external vertex. If the vertex does not exist, it raises an internal error
+    uint64_t ext2int(uint64_t external_vertex_id) const;
 
-    // Apply the function F(vertex) to all outgoing & incoming edges
-    template<typename Function>
-    void for_all_edges(const EdgePair&, Function F);
-
-    // Check if a directed edge between vertex1 and vertex2 exists
-    bool check_directed_edge_exists(uint64_t vertex1, uint64_t vertex2);
-
-    // Assume the lock has already been acquired
-    bool add_edge_v2_impl(gfe::graph::WeightedEdge e); // no thread safe impl
-    bool add_vertex0(uint64_t vertex_id);
-    bool delete_vertex0(uint64_t vertex_id);
-    bool add_edge_impl(graph::WeightedEdge e);
-    bool add_edge0(graph::WeightedEdge e, NodeList::iterator& v_src, NodeList::iterator& v_dst);
-    bool delete_edge0(graph::Edge e);
-
-    // Compute the local clustering coefficient
-    void lcc_undirected(std::unordered_map<uint64_t, double>& result);
-    void lcc_directed(std::unordered_map<uint64_t, double>& result);
-
-    // Timeout
-    bool has_timeout() const;
+    // Retrieve the internal vertex ID for the given internal vertex ID. If the vertex does not exist, it returns uint64_t::max()
+    uint64_t int2ext(void* transaction, uint64_t internal_vertex_id) const;
 
 public:
     /**
-     * Initialise the graph instance
+     * Create an instance of LiveGraph
+     * @param is_directed: whether the underlying graph should be directed or undirected
+     * @param read_only: whether to use read-only transactions for the algorithms in Graphalytics
      */
-    AdjacencyList(bool is_directed, bool is_thread_safe = true);
+    LiveGraphDriver(bool is_directed, bool read_only = true);
 
     /**
      * Destructor
      */
-    ~AdjacencyList();
+    virtual ~LiveGraphDriver();
 
     /**
      * Get the number of edges contained in the graph
@@ -101,51 +70,49 @@ public:
     virtual uint64_t num_vertices() const;
 
     /**
-     * Is the graph directed?
-     */
-    virtual bool is_directed() const;
-
-    /**
-     * Is this implementation thread safe?
-     */
-    bool is_thread_safe() const;
-
-    /**
      * Returns true if the given vertex is present, false otherwise
      */
     virtual bool has_vertex(uint64_t vertex_id) const;
 
     /**
-     * Retrieve the weight associated to the given edge, or -1 if the given edge does not exist
+     * Returns the weight of the given edge is the edge is present, or NaN otherwise
      */
     virtual double get_weight(uint64_t source, uint64_t destination) const;
 
     /**
-     * Dump the content of the graph to the given output stream
+     * Check whether the graph is directed
      */
-    virtual void dump_ostream(std::ostream& out) const;
+    virtual bool is_directed() const;
+
+    /**
+     * Impose a timeout on each graph computation. A computation that does not terminate by the given seconds will raise a TimeoutError.
+     */
+    virtual void set_timeout(uint64_t seconds);
 
     /**
      * Add the given vertex to the graph
-     * @return true if the vertex has been inserted, false otherwise
+     * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)
      */
     virtual bool add_vertex(uint64_t vertex_id);
 
     /**
-     * Remove the given vertex and all edges attached to it.
-     * @return true in case of success, false otherwise
+     * Remove the mapping for a given vertex. The actual internal vertex is not removed from the adjacency list.
+     * @param vertex_id the vertex to remove
+     * @return true if a mapping for that vertex existed, false otherwise
      */
     virtual bool remove_vertex(uint64_t vertex_id);
 
     /**
-     * Add the given edge in the graph
-     * @return true if the edge has been inserted or updated, false in case of error
+     * Add the given edge in the graph if it doesn't exist
+     * @return true if the edge has been inserted, false if this edge already exists or one of the referred
+     *         vertices does not exist.
      */
-    virtual bool add_edge(graph::WeightedEdge e);
+    virtual bool add_edge(gfe::graph::WeightedEdge e);
 
     /**
-     * Remove the given edge from the graph
-     * @return true if the given edge has been removed, false otherwise (e.g. this edge does not exist)
+     * Add the given edge in the graph. Implicitly create the referred vertices if they do not already exist.
+     * If the edge already exists, its weight is updated.
+     * @return always true.
      */
     virtual bool add_edge_v2(gfe::graph::WeightedEdge e);
 
@@ -153,17 +120,19 @@ public:
      * Remove the given edge from the graph
      * @return true if the given edge has been removed, false otherwise (e.g. this edge does not exist)
      */
-    virtual bool remove_edge(graph::Edge e);
+    virtual bool remove_edge(gfe::graph::Edge e);
 
     /**
-     * Load the whole graph representation from the given path
+     * Dump the content of the graph to given stream.
      */
-    virtual void load(const std::string& path);
+    virtual void dump_ostream(std::ostream& out) const;
 
     /**
-     * Set a timeout for a graph computation. If the computation does not terminate with the given time buget, it raises a TimeoutError
+     * Retrieve the opaque objects for the internal LiveGraph & Vertex Dictionary handles.
+     * For Debugging & Testing only
      */
-    virtual void set_timeout(uint64_t seconds);
+    void* livegraph(); // lg::Graph*
+    void* vertex_dictionary(); // tbb::concurrent_hash_map<uint64_t, lg::vertex_t>
 
     /**
      * Perform a BFS from source_vertex_id to all the other vertices in the graph.
@@ -210,4 +179,3 @@ public:
 };
 
 } // namespace
-

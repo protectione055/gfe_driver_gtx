@@ -33,6 +33,7 @@ protected:
     void* m_pImpl; // pointer to the teseo library
     const bool m_is_directed; // whether the underlying graph is directed or undirected
     const bool m_read_only; // whether to used read only transactions for graphalytics
+    bool m_thread_affinity; // whether to enable the thread affinity in graphalytics
     std::chrono::seconds m_timeout { 0 }; // the budget to complete each of the algorithms in the Graphalytics suite
 
 public:
@@ -84,6 +85,21 @@ public:
     virtual void set_timeout(uint64_t seconds);
 
     /**
+     * Whether to restrict the execution of the OpenMP threads in sockets
+     */
+    virtual void set_thread_affinity(bool value);
+
+    /**
+     * Whether thread affinity is set
+     */
+    virtual bool has_thread_affinity() const;
+
+    /**
+     * Whether Graphalytics transactions should be `read-only'
+     */
+    virtual bool has_read_only_transactions() const;
+
+    /**
      * Add the given vertex to the graph
      * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)
      */
@@ -97,9 +113,9 @@ public:
     virtual bool remove_vertex(uint64_t vertex_id);
 
     /**
-     * Add the given edge in the graph. The implementation does not check whether this edge already exists,
-     * adding a new edge always.
-     * @return always true when both the source & the destination vertices already exist, false otherwise
+     * Add the given edge in the graph
+     * @return true if the edge has been inserted, false if this edge already exists or one of the referred
+     *         vertices does not exist.
      */
     virtual bool add_edge(gfe::graph::WeightedEdge e);
 
@@ -110,9 +126,8 @@ public:
     virtual bool add_edge_v2(gfe::graph::WeightedEdge e);
 
     /**
-     * Remove the given edge from the graph. There is no way to check whether the operation actually succeeded
-     * in this implementation of GraphOne. Attempting to remove an edge that does not exist may result in a crash.
-     * @return always true when both the source & the destination vertices already exist, false otherwise
+     * Remove the given edge from the graph
+     * @return true if the given edge has been removed, false otherwise (e.g. this edge does not exist)
      */
     virtual bool remove_edge(gfe::graph::Edge e);
 
@@ -170,9 +185,32 @@ public:
     virtual void sssp(uint64_t source_vertex_id, const char* dump2file = nullptr);
 
     /**
-     * Retrieve the handle to the implementation, for debugging pruposes
+     * Retrieve the handle to the Teseo implementation
      */
     void* handle_impl();
 };
+
+
+/**
+ * Specialised implementation of the LCC kernel
+ */
+class TeseoDriverLCC : public TeseoDriver {
+    TeseoDriverLCC(const TeseoDriverLCC& ) = delete;
+    TeseoDriverLCC& operator=(const TeseoDriverLCC& ) = delete;
+
+public:
+    /**
+     * Constructor
+     * @param is_directed whether the graph is directed
+     * @param read_only whether to create the transactions for the algorithms in Graphalytics as read-only
+     */
+    TeseoDriverLCC(bool is_directed, bool read_only = true);
+
+    /**
+     * Specialised implementation of the kernel LCC
+     */
+    virtual void lcc(const char* dump2file = nullptr);
+};
+
 
 }

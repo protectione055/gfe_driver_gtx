@@ -49,10 +49,16 @@ class Aging2Experiment {
     uint64_t m_worker_granularity = 1024; // the granularity of a task for a worker, that is the number of contiguous operations (inserts/deletes) performed inside the threads between each invocation to the scheduler.
     double m_max_weight = 1.0; // set the max weight for the edges to create
     std::chrono::milliseconds m_build_frequency {0}; // the frequency to create a new delta/snapshot, that is invoking the method #build()
+    bool m_memfp = false; // whether to measure the memory footprint
+    bool m_memfp_physical = false; // whether to consider the physical or the virtual memory in the memory footprint
+    uint64_t m_memfp_threshold = 0; // forcedly stop the execution of the experiment when the readings of the memory footprint are above this threshold (0 = infinite)
+    bool m_release_driver_memory = true; // whether to release the driver's memory as the experiment proceeds. Otherwise, it's only released at the end of the experiment
+    bool m_report_memory_footprint = false; // whether to print to stdout the measurements observed for the memory footprint
     bool m_report_progress = false; // whether to report the current progress
     uint64_t m_num_reports_per_operations = 1; // how often to save in the database progress done
     bool m_measure_latency = false; // whether to measure the latency of updates
-    bool m_has_timeout = false; // stop the experiment after 4 hours?
+    std::chrono::seconds m_timeout {0}; // max time to run the simulation (excl. cool-off time)
+    std::chrono::seconds m_cooloff {0}; // number of seconds to wait after the experiment terminates, to check the effectiveness of the GC
 
 public:
     // Instantiate the factory class
@@ -73,8 +79,14 @@ public:
     // Set how frequently create a new snapshot/delta in the library (0 = do not create new snapshots)
     void set_build_frequency(std::chrono::milliseconds millisecs);
 
+    // whether to release the driver's memory as the experiment proceeds. Otherwise, it's only released at the end of the experiment
+    void set_release_memory(bool value);
+
     // Whether to print to stdout the current progress of the experiment
     void set_report_progress(bool value);
+
+    // Whether to print to stdout the measurements observed for the memory footprint
+    void set_report_memory_footprint(bool value);
 
     // Set how often to save in the database the progress done. The minimum value is 1.
     // A value of N, implies that there will N reports every `num_edges' operations. For instance:
@@ -86,8 +98,21 @@ public:
     // Measure the latency of updates?
     void set_measure_latency(bool value);
 
-    // Stop the experiment after four hours
-    void set_timeout(bool value);
+    // Set the max time to run the experiment
+    void set_timeout(std::chrono::seconds secs);
+
+    // Cool-off period. Number of seconds to wait idle after the simulation terminated, measuring the memory footprint
+    void set_cooloff(std::chrono::seconds secs);
+
+    // Measure the memory footprint?
+    void set_memfp(bool value);
+    void set_measure_memfp(bool value){ set_memfp(value); }
+
+    // Whether to measure the phyical memory or the virtual memory in the memory footprint
+    void set_memfp_physical(bool value);
+
+    // Forcedly stop the execution of the experiment when the readings of the memory footprint are above this threshold (0 = infinite)
+    void set_memfp_threshold(uint64_t value);
 
     // [Internal parameter]
     // Set the granularity of a task for a worker thread. This is the number of contiguos operations (inserts/deletes) done

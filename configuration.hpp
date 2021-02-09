@@ -59,6 +59,12 @@ class Configuration {
     Configuration& operator=(const Configuration& ) = delete;
 
     // properties
+    uint64_t m_aging_cooloff_seconds { 0 }; // cool-off period in the aging experiment, in seconds.
+    bool m_aging_memfp = false; // whether to measure the memory footprint
+    bool m_aging_memfp_physical = false; // whether to compute the physical memory or the virtual memory
+    bool m_aging_memfp_report = false; // whether to print stdout the measurements observed for the memory footprint
+    uint64_t m_aging_memfp_threshold { 0 }; // forcedly stop the execution of the aging2 experiment if the process is using more memory than this threshold, in bytes
+    bool m_aging_release_memory = true; // whether to release the memory from the driver as the experiment proceeds
     std::vector<std::string> m_blacklist; // list of graph algorithms that cannot be executed
     uint64_t m_build_frequency { 0 }; // in the aging experiment, the amount of time that must pass before each invocation to #build(), in milliseconds
     double m_coeff_aging { 0.0 }; // coefficient for the additional updates to perform
@@ -68,6 +74,7 @@ class Configuration {
     double m_ef_edges = 1;  // expansion factor for the edges in the graph
     bool m_graph_directed = true; // whether the graph is undirected or directed
     std::string m_library_name; // the library to test
+    bool m_load = false; // whether to load the graph in one go
     double m_max_weight { 1.0 }; // the maximum weight that can be assigned when reading non weighted graphs
     bool m_measure_latency = false; // whether to measure the latency of the update operations (insert/deletion).
     uint64_t m_num_repetitions { 0 }; // when applicable, how many times the same experiment should be repeated
@@ -77,23 +84,28 @@ class Configuration {
     std::string m_path_graph_to_load; // the file must be accessible to the server
     uint64_t m_seed = 5051789ull; // random seed, used in various places in the experiments
     double m_step_size_recordings { 1.0 }; // in the aging2 experiment, how often to record the progress done in the db. It must be a value in (0, 1].
-    bool m_timeout_aging2 { false }; // forcedly stop the aging2 experiment after four hours, if it hasn't terminated yet
-    uint64_t m_timeout_seconds { 3600 }; // max time to complete an operation, in seconds (0 => indefinite)
+    uint64_t m_timeout_aging2 { 0 }; // forcedly stop the aging2 experiment after the given amount of seconds
+    uint64_t m_timeout_graphalytics { 3600 }; // max time to complete a kernel from Graphalytics, in seconds (0 => indefinite)
     std::string m_update_log; // aging experiment through the log file
     std::unique_ptr<library::Interface> (*m_library_factory)(bool directed) {nullptr} ; // function to retrieve an instance of the library `m_library_name'
+    std::string m_validate_graph; // validate the results from graphalytics against the given graph
     bool m_validate_inserts = false; // whether to validate the edges inserted
     bool m_validate_output = false; // whether to validate the execution results of the Graphalytics algorithms
 
+    void set_aging_cooloff_seconds(uint64_t value);
+    void set_aging_memfp_threshold(uint64_t bytes);
     void set_aging_step_size(double value); // The step in each recording in the progress for the Agin2 experiment. In (0, 1].
     void set_build_frequency(uint64_t millisecs);
     void set_coeff_aging(double value); // Set the coefficient for `aging', i.e. how many updates (insertions/deletions) to perform w.r.t. to the size of the loaded graph
     void set_ef_vertices(double value);
     void set_ef_edges(double value);
+    void set_load(bool value);
     void set_num_repetitions(uint64_t value); // Set how many times to repeat the Graphalytics suite of algorithms
     void set_num_threads_omp(int value); // The number of threads created by an OpenMP master
     void set_num_threads_read(int value); // Set the number of threads to use in the read operations.
     void set_num_threads_write(int value); // Set the number of threads to use in the write operations.
-    void set_timeout(uint64_t seconds); // Set the timeout property
+    void set_timeout_aging2(uint64_t seconds); // Set the maximum amount of time (excl. cool-off time) to run the Aging2 experiment
+    void set_timeout_graphalytics(uint64_t seconds); // Set the timeout property
     void set_graph(const std::string& graph); // Set the graph to load and run the experiments
 
     // Set the path to the database
@@ -115,7 +127,7 @@ public:
     ~Configuration();
 
     // Initialise the configuration with the arguments provided by the user
-    void initialiase(int argc, char* argv[]);
+    void initialise(int argc, char* argv[]);
 
     // Retrieve the name of the library to evaluate
     const std::string& get_library_name() const { return m_library_name; }
@@ -134,6 +146,9 @@ public:
 
     // Whether to validate the edges inserted
     bool validate_inserts() const { return m_validate_inserts; }
+
+    // The path to the graph with the results to validate
+    const std::string& get_validation_graph() const;
 
     // Coefficient for the surplus of updates to perform (noise) w.r.t. the final graph  to load
     double coefficient_aging() const{ return m_coeff_aging; }
@@ -159,8 +174,11 @@ public:
     // The path for the graph to load
     const std::string& get_path_graph() const { return m_path_graph_to_load; }
 
-    // The budget to complete a Graphalytics algorithm, in seconds (e.g. LCC should terminate by get_timeout_per_operation() seconds)
-    uint64_t get_timeout_per_operation() const { return m_timeout_seconds; }
+    // The budget to complete a Graphalytics algorithm, in seconds (e.g. LCC should terminate by get_timeout_graphalytics() seconds)
+    uint64_t get_timeout_graphalytics() const { return m_timeout_graphalytics; }
+
+    // Maximum amount of time to run the Aging2 experiment, in seconds
+    uint64_t get_timeout_aging2() const { return m_timeout_aging2; }
 
     // Get the expansion factor in the aging experiment for the edges in the graph
     double get_ef_edges() const { return m_ef_edges; }
@@ -171,11 +189,32 @@ public:
     // Get the frequency to build a new snapshot, in milliseconds
     uint64_t get_build_frequency() const{ return m_build_frequency; }
 
+    // Get the cool-off period in the aging experiment. After the experiment terminates, the driver waits for the given
+    // amount of seconds idle, checking the amount of memory used. The goal is to detect the impact of the garbage
+    // collector of the evaluated library in reducing the memory footprint when no updates are being executed.
+    uint64_t get_aging_cooloff_seconds() const { return m_aging_cooloff_seconds; }
+
+    // Whether to measure the memory footprint in the aging2 experiment
+    bool get_aging_memfp() const { return m_aging_memfp; }
+    bool measure_memfp() const { return get_aging_memfp(); }
+
+    // Forcedly stop the execution of the aging2 experiment if the process is using more memory than this threshold, in bytes
+    uint64_t get_aging_memfp_threshold() const { return m_aging_memfp_threshold; }
+
+    // Whether to print to stdout the measurements observed for the memory footprint
+    bool get_aging_memfp_report() const { return m_aging_memfp_report; }
+
+    // Whether to consider the physical memory or the virtual memory in the memory footprint
+    bool get_aging_memfp_physical() const { return m_aging_memfp_physical; }
+
+    // Whether to release the memory from the driver as the experiment proceeds
+    bool get_aging_release_memory() const { return m_aging_release_memory; }
+
     // Check whether the configuration/results need to be stored into a database
     bool has_database() const;
 
-    // Is the timeout set for the aging2 experiment?
-    bool is_aging2_timeout_set() const;
+    // Whether to load the graph in one go
+    bool is_load() const;
 
     // Retrieve the handle to the database connection, where the final results of the experiments are stored
     ::common::Database* db();

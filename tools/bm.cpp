@@ -47,9 +47,13 @@
 #include "reader/graphalytics_reader.hpp"
 #include "configuration.hpp"
 
+// csr
+#include "library/baseline/csr.hpp"
+
 // teseo
 #if defined(HAVE_TESEO)
 #include "library/teseo/teseo_driver.hpp"
+#include "library/teseo/teseo_openmp.hpp"
 #include "teseo/context/global_context.hpp"
 #include "teseo/memstore/memstore.hpp"
 #include "teseo.hpp"
@@ -59,6 +63,12 @@
 #if defined(HAVE_GRAPHONE)
 #include "library/graphone/graphone.hpp"
 #include "library/graphone/internal.hpp"
+#endif
+
+// livegraph
+#if defined(HAVE_LIVEGRAPH)
+#include "library/livegraph/livegraph_driver.hpp"
+#include "third-party/livegraph/livegraph.hpp"
 #endif
 
 // llama
@@ -106,10 +116,15 @@ static void compute_medians(); // populate g_medians
 static void load();
 static void parse_args(int argc, char* argv[]);
 static void run();
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+[[maybe_unused]] static void run_csr();
 [[maybe_unused]] static void run_teseo(bool read_only);
 [[maybe_unused]] static void run_graphone();
 [[maybe_unused]] static void run_llama();
+[[maybe_unused]] static void run_livegraph(bool read_only);
 [[maybe_unused]] static void run_stinger();
+#pragma GCC diagnostic pop
 static void print_results();
 static void save_results(const std::string& where);
 static string string_usage(char* program_name);
@@ -143,7 +158,9 @@ static void run(){
     common::Timer timer;
     timer.start();
 
-    if(g_library == "teseo"){
+    if(g_library == "csr" || g_library == "csr-numa"){
+        run_csr();
+    } else if(g_library == "teseo"){
 #if defined(HAVE_TESEO)
         run_teseo(/* read only ? */ true);
 #else
@@ -160,6 +177,12 @@ static void run(){
         run_graphone();
 #else
         assert(0 && "Support for graphone disabled");
+#endif
+    } else if(g_library == "livegraph-ro" || g_library == "livegraph-rw"){
+#if defined(HAVE_LIVEGRAPH)
+        run_livegraph(/* read only ? */ g_library == "livegraph-ro");
+#else
+        assert(0 && "Support for livegraph disabled");
 #endif
     } else if(g_library == "llama"){
 #if defined(HAVE_LLAMA)
@@ -181,45 +204,106 @@ static void run(){
     LOG("Experimented completed in " << timer);
 }
 
+void _bm_run_csr(){
+    library::CSR* csr = dynamic_cast<library::CSR*>(g_interface.get());
+    uint64_t* __restrict out_e = csr->m_out_e;
+    const uint64_t num_vertices = csr->num_vertices();
+    common::Timer timer;
+
+    for(int r = 0; r < g_num_repetitions; r++){
+        LOG("Repetition: " << (r +1) << "/" << g_num_repetitions);
+        for(auto num_threads: g_num_threads){
+            LOG("    num threads: " << num_threads);
+
+            // degree, logical identifiers, sorted
+            timer.start();
+            uint64_t sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < num_vertices; i++){
+                sum += csr->get_out_degree(i);
+            }
+            timer.stop();
+            validate_sum_degree(sum);
+            g_samples.emplace_back("degree_logical_sorted", num_threads, timer.microseconds());
+
+            // degree, logical identifiers, unsorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < num_vertices; i++){
+                sum += csr->get_out_degree(g_vertices_logical[i]);            }
+            timer.stop();
+            validate_sum_degree(sum);
+            g_samples.emplace_back("degree_logical_unsorted", num_threads, timer.microseconds());
+
+            // point lookups, logical vertices, sorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < num_vertices; i++){
+                auto p = csr->get_out_interval(i);
+                if(p.second > p.first){ // otherwise the vertex does not have outgoing edges
+                    sum += csr->m_out_e[p.first];
+                }
+            }
+            timer.stop();
+            validate_sum_point_lookups(sum);
+            g_samples.emplace_back("point_logical_sorted", num_threads, timer.microseconds());
+
+            // point lookups, logical, unsorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < num_vertices; i++){
+                auto p = csr->get_out_interval(g_vertices_logical[i]);
+                if(p.second > p.first){ // otherwise the vertex does not have outgoing edges
+                    sum += csr->m_out_e[p.first];
+                }
+            }
+            timer.stop();
+            validate_sum_point_lookups(sum);
+            g_samples.emplace_back("point_logical_unsorted", num_threads, timer.microseconds());
+
+            // scan, logical vertices, sorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < num_vertices; i++){
+                auto p = csr->get_out_interval(i);
+                for(uint64_t j = p.first; j < p.second; j++){
+                    sum += out_e[j];
+                }
+            }
+            timer.stop();
+            validate_sum_scan(sum);
+            g_samples.emplace_back("scan_logical_sorted", num_threads, timer.microseconds());
+
+            // scan, logical vertices, unsorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < num_vertices; i++){
+                auto p = csr->get_out_interval(g_vertices_logical[i]);
+                for(uint64_t j = p.first; j < p.second; j++){
+                    sum += out_e[j];
+                }
+            }
+            timer.stop();
+            validate_sum_scan(sum);
+            g_samples.emplace_back("scan_logical_unsorted", num_threads, timer.microseconds());
+        }
+    }
+}
+
+void run_csr(){ _bm_run_csr(); }
+
 #if defined(HAVE_TESEO)
-
-namespace {
-
-struct RegisterThread {
-    RegisterThread& operator=(const RegisterThread&) = delete;
-    teseo::Teseo* m_teseo;
-
-public:
-    RegisterThread(teseo::Teseo* teseo) : m_teseo(teseo){
-        assert(teseo != nullptr);
-        assert(omp_get_thread_num() == 0 && "Expected to be initialised in the master thread");
-    }
-
-    RegisterThread(const RegisterThread& rt) : m_teseo(rt.m_teseo){
-        if(omp_get_thread_num() > 0){ m_teseo->register_thread(); }
-    }
-
-    ~RegisterThread(){
-        if(omp_get_thread_num() > 0){ m_teseo->unregister_thread(); }
-    }
-};
-
-struct State3 {
-    RegisterThread m_register_thread;
-    teseo::Transaction m_transaction;
-    teseo::Iterator m_iterator;
-
-    State3(teseo::Teseo* teseo, const teseo::Transaction& transaction) :
-        m_register_thread{teseo}, m_transaction(transaction), m_iterator(m_transaction.iterator()) { }
-};
-
-} // anon
 
 static void run_teseo(bool read_only){
     using namespace teseo;
-    Teseo* teseo = reinterpret_cast<Teseo*>(dynamic_cast<library::TeseoDriver*>(g_interface.get())->handle_impl());
-    teseo->register_thread();
-    State3 s3 { teseo, teseo->start_transaction(read_only) };
+    using namespace gfe::library::teseo_driver_internal;
+
+    OpenMP teseo_openmp { dynamic_cast<library::TeseoDriver*>(g_interface.get()) };
     const uint64_t num_vertices = g_vertices_sorted.size();
     common::Timer timer;
 
@@ -231,9 +315,9 @@ static void run_teseo(bool read_only){
             // vertices, sorted, vertex identifiers
             timer.start();
             uint64_t sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                sum += s3.m_transaction.degree(g_vertices_sorted[i], false);
+                sum += teseo_openmp.transaction().degree(g_vertices_sorted[i], false);
             }
             timer.stop();
 
@@ -243,9 +327,9 @@ static void run_teseo(bool read_only){
             // vertices, unsorted, vertex identifiers
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                sum += s3.m_transaction.degree(g_vertices_unsorted[i], false);
+                sum += teseo_openmp.transaction().degree(g_vertices_unsorted[i], false);
             }
             timer.stop();
             validate_sum_degree(sum);
@@ -254,9 +338,9 @@ static void run_teseo(bool read_only){
             // vertices, logical identifiers, sorted
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                sum += s3.m_transaction.degree(i, true);
+                sum += teseo_openmp.transaction().degree(i, true);
             }
             timer.stop();
             validate_sum_degree(sum);
@@ -265,9 +349,9 @@ static void run_teseo(bool read_only){
             // vertices, logical identifiers, unsorted
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                sum += s3.m_transaction.degree(g_vertices_logical[i], true);
+                sum += teseo_openmp.transaction().degree(g_vertices_logical[i], true);
             }
             timer.stop();
             validate_sum_degree(sum);
@@ -278,9 +362,9 @@ static void run_teseo(bool read_only){
             // point lookups, real vertices, sorted
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                s3.m_iterator.edges(g_vertices_sorted[i], false, [&sum](uint64_t destination, double weight){
+                teseo_openmp.iterator().edges(g_vertices_sorted[i], false, [&sum](uint64_t destination){
                     sum += destination;
                     return false; // stop the iteration
                 });
@@ -292,9 +376,9 @@ static void run_teseo(bool read_only){
             // point lookups, real vertices, unsorted
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                s3.m_iterator.edges(g_vertices_unsorted[i], false, [&sum](uint64_t destination, double weight){
+                teseo_openmp.iterator().edges(g_vertices_unsorted[i], false, [&sum](uint64_t destination){
                     sum += destination;
                     return false; // stop the iteration
                 });
@@ -308,9 +392,9 @@ static void run_teseo(bool read_only){
             // point lookups, logical vertices, sorted
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                s3.m_iterator.edges(i, true, [&sum](uint64_t destination, double weight){
+                teseo_openmp.iterator().edges(i, true, [&sum](uint64_t destination){
                     sum += destination;
                     return false; // stop the iteration
                 });
@@ -321,9 +405,9 @@ static void run_teseo(bool read_only){
 
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                s3.m_iterator.edges(g_vertices_logical[i], true, [&sum](uint64_t destination, double weight){
+                teseo_openmp.iterator().edges(g_vertices_logical[i], true, [&sum](uint64_t destination){
                     sum += destination;
                     return false; // stop the iteration
                 });
@@ -337,11 +421,10 @@ static void run_teseo(bool read_only){
             // scan, real vertices, sorted
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                s3.m_iterator.edges(g_vertices_sorted[i], false, [&sum](uint64_t destination, double weight){
+                teseo_openmp.iterator().edges(g_vertices_sorted[i], false, [&sum](uint64_t destination){
                     sum += destination;
-                    return true; // stop the iteration
                 });
             }
             timer.stop();
@@ -351,11 +434,10 @@ static void run_teseo(bool read_only){
             // scan, real vertices, unsorted
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                s3.m_iterator.edges(g_vertices_unsorted[i], false, [&sum](uint64_t destination, double weight){
+                teseo_openmp.iterator().edges(g_vertices_unsorted[i], false, [&sum](uint64_t destination){
                     sum += destination;
-                    return true; // stop the iteration
                 });
             }
             timer.stop();
@@ -367,11 +449,10 @@ static void run_teseo(bool read_only){
             // scan, logical vertices, sorted
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                s3.m_iterator.edges(i, true, [&sum](uint64_t destination, double weight){
+                teseo_openmp.iterator().edges(i, true, [&sum](uint64_t destination){
                     sum += destination;
-                    return true; // stop the iteration
                 });
             }
             timer.stop();
@@ -382,11 +463,10 @@ static void run_teseo(bool read_only){
             // scan, logical vertices, unsorted
             timer.start();
             sum = 0;
-            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(s3) schedule(dynamic, 4096)
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) firstprivate(teseo_openmp) schedule(dynamic, 4096)
             for(uint64_t i = 0; i < num_vertices; i++){
-                s3.m_iterator.edges(g_vertices_logical[i], true, [&sum](uint64_t destination, double weight){
+                teseo_openmp.iterator().edges(g_vertices_logical[i], true, [&sum](uint64_t destination){
                     sum += destination;
-                    return true; // stop the iteration
                 });
             }
             timer.stop();
@@ -692,9 +772,138 @@ static void run_llama(){
 }
 #endif
 
+#if defined(HAVE_LIVEGRAPH)
+static void run_livegraph(bool read_only){
+    auto interface = dynamic_cast<library::LiveGraphDriver*>(g_interface.get());
+    auto livegraph = reinterpret_cast<lg::Graph*>( interface->livegraph() );
+    const uint64_t max_vertex_id = livegraph->get_max_vertex_id();
+    auto transaction = read_only ? livegraph->begin_read_only_transaction() : livegraph->begin_transaction();
+
+    // perform a new permutation of the logical vertices, based on max_vertex_id
+    unique_ptr<uint64_t[]> ptr_permutation { new uint64_t[max_vertex_id] };
+    uint64_t* permutation = ptr_permutation.get(); // do not init the values 0, 1, 2, 3...
+    common::permute(permutation, max_vertex_id, configuration().seed() + 91);
+
+    common::Timer timer;
+
+    for(int r = 0; r < g_num_repetitions; r++){
+        LOG("Repetition: " << (r +1) << "/" << g_num_repetitions);
+        for(auto num_threads: g_num_threads){
+            LOG("    num threads: " << num_threads);
+
+            // degree, logical identifiers, sorted
+            timer.start();
+            uint64_t sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < max_vertex_id; i++){
+                uint64_t vertex_id = i;
+                if(transaction.get_vertex(vertex_id).empty()) continue; // skip non existing vertices
+                // there is no #degree method in Livegraph. We must perform a full pass of the iterator
+                // to discover the degree
+                uint64_t degree = 0;
+                auto iterator = transaction.get_edges(vertex_id, /* label */ 0);
+                while(iterator.valid()){
+                    degree++;
+                    iterator.next();
+                }
+
+                sum += degree;
+            }
+            timer.stop();
+            validate_sum_degree(sum);
+            g_samples.emplace_back("degree_logical_sorted", num_threads, timer.microseconds());
+
+            // degree, logical identifiers, unsorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < max_vertex_id; i++){
+                uint64_t vertex_id = permutation[i];
+                if(transaction.get_vertex(vertex_id).empty()) continue; // skip non existing vertices
+                // there is no #degree method in Livegraph. We must perform a full pass of the iterator
+                // to discover the degree
+                uint64_t degree = 0;
+                auto iterator = transaction.get_edges(vertex_id, /* label */ 0);
+                while(iterator.valid()){
+                    degree++;
+                    iterator.next();
+                }
+
+                sum += degree;
+            }
+            timer.stop();
+            validate_sum_degree(sum);
+            g_samples.emplace_back("degree_logical_unsorted", num_threads, timer.microseconds());
+
+            // point lookups, logical vertices, sorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < max_vertex_id; i++){
+                uint64_t vertex_id = i;
+                if(transaction.get_vertex(vertex_id).empty()) continue; // skip non existing vertices
+                auto iterator = transaction.get_edges(vertex_id, /* label */ 0);
+                if(iterator.valid()){ sum += iterator.dst_id(); }
+            }
+            timer.stop();
+            validate_sum_point_lookups(sum);
+            g_samples.emplace_back("point_logical_sorted", num_threads, timer.microseconds());
+
+            // point lookups, logical, unsorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < max_vertex_id; i++){
+                uint64_t vertex_id = permutation[i];
+                if(transaction.get_vertex(vertex_id).empty()) continue; // skip non existing vertices
+                auto iterator = transaction.get_edges(vertex_id, /* label */ 0);
+                if(iterator.valid()){ sum += iterator.dst_id(); }
+            }
+            timer.stop();
+            validate_sum_point_lookups(sum);
+            g_samples.emplace_back("point_logical_unsorted", num_threads, timer.microseconds());
+
+            // scan, logical vertices, sorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < max_vertex_id; i++){
+                uint64_t vertex_id = i;
+                if(transaction.get_vertex(vertex_id).empty()) continue; // skip non existing vertices
+                auto iterator = transaction.get_edges(vertex_id, /* label */ 0);
+                while(iterator.valid()){
+                    sum += iterator.dst_id();
+                    iterator.next();
+                }
+            }
+            timer.stop();
+            validate_sum_scan(sum);
+            g_samples.emplace_back("scan_logical_sorted", num_threads, timer.microseconds());
+
+            // scan, logical vertices, unsorted
+            timer.start();
+            sum = 0;
+            #pragma omp parallel for num_threads(num_threads) reduction(+:sum) schedule(dynamic, 4096)
+            for(uint64_t i = 0; i < max_vertex_id; i++){
+                uint64_t vertex_id = permutation[i];
+                if(transaction.get_vertex(vertex_id).empty()) continue; // skip non existing vertices
+                auto iterator = transaction.get_edges(vertex_id, /* label */ 0);
+                while(iterator.valid()){
+                    sum += iterator.dst_id();
+                    iterator.next();
+                }
+            }
+            timer.stop();
+            validate_sum_scan(sum);
+            g_samples.emplace_back("scan_logical_unsorted", num_threads, timer.microseconds());
+        }
+    }
+
+    transaction.abort(); // we're done
+}
+#endif
 
 #if defined(HAVE_STINGER)
-
 static uint64_t stinger_point_lookup(struct stinger* stinger, uint64_t vertex_id){
     STINGER_FORALL_OUT_EDGES_OF_VTX_BEGIN(stinger, vertex_id) {
         return STINGER_EDGE_DEST;
@@ -839,7 +1048,6 @@ static void compute_medians(){
                 median = list[list.size() /2];
             }
 
-
             string key = kv.first;
             key += "@";
             key += num_threads;
@@ -853,7 +1061,11 @@ static void compute_medians(){
 }
 
 static void load(){
-    if(g_library == "teseo" || g_library == "teseo-rw"){
+    if(g_library == "csr"){
+        g_interface.reset( new gfe::library::CSR( /* directed ? */ false, /* numa interleaved */ false ) );
+    } else if(g_library == "csr-numa"){
+        g_interface.reset( new gfe::library::CSR( /* directed ? */ false, /* numa interleaved */ true ) );
+    } else if(g_library == "teseo" || g_library == "teseo-rw"){
 #if defined(HAVE_TESEO)
         g_interface.reset( new gfe::library::TeseoDriver(/* directed ? */ false) );
 #else
@@ -883,6 +1095,13 @@ static void load(){
         cerr << "ERROR: gfe configured and built without linking the library llama\n";
         exit(EXIT_FAILURE);
 #endif
+    } else if(g_library == "livegraph-ro" || g_library == "livegraph-rw"){
+#if defined(HAVE_LIVEGRAPH)
+        g_interface.reset( new gfe::library::LiveGraphDriver(/* directed ? */ false));
+#else
+        cerr << "ERROR: gfe configured and built without linking the library livegraph\n";
+        exit(EXIT_FAILURE);
+#endif
     } else if(g_library == "stinger"){
 #if defined(HAVE_STINGER)
         g_interface.reset( new library::StingerRef(/* directed ? */ false) );
@@ -891,10 +1110,6 @@ static void load(){
         exit(EXIT_FAILURE);
 #endif
     }
-
-    LOG("Loading the graph from " << g_path_graph << " ...");
-    auto edges = make_shared<gfe::graph::WeightedEdgeStream> ( g_path_graph );
-    edges->permute();
 
     { // list of vertices
         LOG("Loading the list of vertices...");
@@ -921,20 +1136,33 @@ static void load(){
         LOG("List of vertices loaded in " << timer);
     }
 
-    uint64_t num_threads = thread::hardware_concurrency();
-    if(g_library == "stinger"){ // best number of threads in stones2 according to the scalability results
-        num_threads = 1;
-    } else if(g_library == "llama"){
-        num_threads = 16;
-    } else if(g_library == "graphone"){
-        num_threads = 3;
-    }
+    if(g_library == "csr" || g_library == "csr-numa") {
+        LOG("Loading the graph from " << g_path_graph << " ... ");
+        common::Timer timer; timer.start();
+        dynamic_pointer_cast<gfe::library::LoaderInterface>(g_interface)->load(g_path_graph);
+        timer.stop();
+        LOG("Load performed in " << timer);
 
-    LOG("Inserting " << edges->num_edges() << " edges into `" << g_library << "' ...");
-    gfe::experiment::InsertOnly insert(dynamic_pointer_cast<gfe::library::UpdateInterface>(g_interface), edges, num_threads);
-    if(g_library == "llama"){ insert.set_build_frequency( 10s ); }
-    insert.set_scheduler_granularity(1ull < 20);
-    insert.execute();
+    } else {
+        LOG("Loading the graph from " << g_path_graph << " ...");
+        auto edges = make_shared<gfe::graph::WeightedEdgeStream> ( g_path_graph );
+        edges->permute();
+
+        uint64_t num_threads = thread::hardware_concurrency();
+        if(g_library == "llama"){ // best number of threads in stones2 according to the scalability results
+            num_threads = 16;
+        } else if(g_library == "graphone"){
+            num_threads = 12;
+        } else if(g_library == "livegraph-ro" || g_library == "livegraph-rw"){
+            num_threads = 20;
+        }
+
+        LOG("Inserting " << edges->num_edges() << " edges into `" << g_library << "' using " << num_threads << " threads ...");
+        gfe::experiment::InsertOnly insert(dynamic_pointer_cast<gfe::library::UpdateInterface>(g_interface), edges, num_threads);
+        if(g_library == "llama"){ insert.set_build_frequency( 10s ); }
+        insert.set_scheduler_granularity(1ull < 20);
+        insert.execute();
+    }
 }
 
 static void parse_args(int argc, char* argv[]) {
@@ -970,8 +1198,11 @@ static void parse_args(int argc, char* argv[]) {
         } break;
         case 'l': {
             string library = optarg;
-            if(library != "teseo" && library != "teseo-rw" && library != "graphone" && library != "llama" && library != "stinger"){
-                cerr << "ERROR: Invalid library: `" << library << "'. Only \"teseo\", \"graphone\", \"llama\" and \"stinger\" are supported." << endl;
+            if(library == "livegraph"){
+                library = "livegraph-ro";
+            } else if(library != "csr" && library != "csr-numa" && library != "teseo" && library != "teseo-rw" && library != "graphone" && library != "llama" && library != "stinger" && library != "livegraph-ro" && library != "livegraph-rw"){
+                cerr << "ERROR: Invalid library: `" << library << "'. Only \"csr\", \"csr-numa\", \"teseo\", \"graphone\", \"llama\" and \"stinger\" are supported." << endl;
+                exit(EXIT_FAILURE);
             }
             g_library = library;
         } break;
@@ -1037,7 +1268,6 @@ static void parse_args(int argc, char* argv[]) {
         }
     }
 
-
     if(g_path_graph.empty()){
         cerr << "ERROR: Input graph (-G) not specified\n";
         cerr << string_usage(argv[0]);
@@ -1074,7 +1304,7 @@ static string string_usage(char* program_name) {
     ss << "Usage: " << program_name << " -G <graph> [-t <num_threads>] [-l <library>] [-R <num_repetitions>]\n";
     ss << "Where: \n";
     ss << "  -G <graph> is an .properties file of an undirected graph from the Graphalytics data set\n";
-    ss << "  -l <library> is the library to execute. Only \"teseo\" (default), \"teseo-rw\", \"graphone\", \"llama\" and \"stinger\" are supported\n";
+    ss << "  -l <library> is the library to execute. Only \"csr\", \"csr-numa\" \"teseo\" (default), \"teseo-rw\", \"graphone\", \"livegraph\", \"livegraph-rw\", \"llama\", and \"stinger\" are supported\n";
     ss << "  -R <num_repetitions> is the number of repetitions the same micro benchmarks need to be performed\n";
     ss << "  -t <num_threads> follows the page range format, e.g. 1-16,32\n";
     return ss.str();

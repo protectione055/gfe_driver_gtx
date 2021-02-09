@@ -77,7 +77,7 @@ namespace gfe::library {
     double SortledtonDriver::get_weight(uint64_t source, uint64_t destination) const {
       SortledtonDriver* non_const_this = const_cast<SortledtonDriver*>(this);
       SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds);  // TODO weights currently not supported
-      auto has_edge = tx.has_edge({source, destination});
+      auto has_edge = tx.has_edge({static_cast<dst_t>(source), static_cast<dst_t>(destination)});
       non_const_this->tm.transactionCompleted(tx);
       return has_edge ? 0.0 : nan("");
     }
@@ -127,7 +127,7 @@ namespace gfe::library {
  */
     bool SortledtonDriver::add_edge(gfe::graph::WeightedEdge e) {
       assert(!m_is_directed);
-      edge_t internal_edge{e.source(), e.destination()};
+      edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
 
       VertexExistsPrecondition pre_v1(internal_edge.src);
@@ -153,7 +153,7 @@ namespace gfe::library {
 
     bool SortledtonDriver::add_edge_v2(gfe::graph::WeightedEdge e) {
       assert(!m_is_directed);
-      edge_t internal_edge{e.source(), e.destination()};
+      edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
 
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
       tx.use_vertex_does_not_exists_semantics();
@@ -168,11 +168,8 @@ namespace gfe::library {
       tx.insert_edge(internal_edge);
 
       bool inserted = true;
-      try {
-        inserted &= tx.execute();
-      } catch (EdgeExistsException& e) {
-        inserted = false;
-      }
+      inserted &= tx.execute();
+
       tm.transactionCompleted(tx);
       return inserted;
     }

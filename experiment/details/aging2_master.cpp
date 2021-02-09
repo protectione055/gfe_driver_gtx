@@ -33,6 +33,7 @@
 #include "experiment/aging2_result.hpp"
 #include "reader/graphlog_reader.hpp"
 #include "library/interface.hpp"
+#include "utility/memory_usage.hpp"
 #include "aging2_worker.hpp"
 #include "build_thread.hpp"
 #include "configuration.hpp"
@@ -182,6 +183,7 @@ void Aging2Master::do_run_experiment(){
     // init the build service (the one that creates the new snapshots/deltas)
     BuildThread build_service { parameters().m_library , static_cast<int>(parameters().m_num_threads) +1, parameters().m_build_frequency };
 
+    auto start_time = chrono::steady_clock::now();
     Timer timer; timer.start();
     m_parameters.m_library->updates_start();
     for(auto w: m_workers) w->execute_updates();
@@ -192,6 +194,7 @@ void Aging2Master::do_run_experiment(){
     timer.stop();
     LOG("[Aging2] Experiment completed!");
     LOG("[Aging2] Updates performed with " << parameters().m_num_threads << " threads in " << timer);
+    cooloff(start_time);
     m_results.m_completion_time = timer.microseconds();
     m_results.m_num_build_invocations = build_service.num_invocations();
     m_results.m_num_levels_created = m_parameters.m_library->num_levels();
@@ -256,9 +259,16 @@ uint64_t Aging2Master::num_edges_final_graph() const {
 void Aging2Master::wait_and_record() {
     bool done = false;
     m_results.m_progress.clear();
+    const bool measure_memfp = parameters().m_memfp;
+    const bool measure_physical_memory = parameters().m_memfp_physical;
+    const bool report_memfp = parameters().m_report_memory_footprint;
+
+    chrono::steady_clock::time_point now = chrono::steady_clock::now();
+    chrono::steady_clock::time_point last_memory_footprint_recording = now;
+    chrono::steady_clock::time_point timeout = now + ( m_parameters.m_timeout == 0s ? /* 1 month */ 31 * 24h : m_parameters.m_timeout );
 
     do {
-        auto tp = chrono::steady_clock::now() + 1s;
+        auto tp = now + 1s;
 
         done = true;
         uint64_t i = 0, num_workers = m_workers.size();
@@ -266,22 +276,63 @@ void Aging2Master::wait_and_record() {
             done &= m_workers[i]->wait(tp);
             i++;
         }
+        now = tp;
 
-        if(!done){ m_results.m_progress.push_back(num_operations_sofar()); }
+        if(!done){
+            m_results.m_progress.push_back(num_operations_sofar());
 
-    } while(!done && m_results.m_progress.size() < 14400 /* 4 h */);
-//    } while(!done && m_results.m_progress.size() < 86400 /* 24 h */);
+            if(measure_memfp && (/* first tick */ (m_results.m_progress.size() == 1) || tp - last_memory_footprint_recording >= 10s)){
+                uint64_t tick = m_results.m_progress.size(); // 1, 10, 20, 30, 40, 50, 60, ...
+                uint64_t memfp_process = measure_physical_memory ? common::get_memory_footprint() : max<int64_t>(utility::MemoryUsage::memory_footprint(), 0);
+                uint64_t memfp_driver = memory_footprint();
+                Aging2Result::MemoryFootprint memfp { tick, memfp_process, memfp_driver, /* cool off ? */ false };
+                m_results.m_memory_footprint.push_back( memfp );;
+                if(report_memfp){ LOG("Memory footprint after " << DurationQuantity( tick ) << ": " << ComputerQuantity(memfp_process - memfp_driver, true)); }
+                if(m_results.m_progress.size() > 1) { last_memory_footprint_recording = tp; } // beyond the first tick
 
-    if(!done){
-        // forcedly stop the experiment
-        if(m_parameters.m_has_timeout){
-            LOG("TIMEOUT HIT, Terminating the experiment ... ");
-            m_stop_experiment = true;
+                if(parameters().m_memfp_threshold > 0 && memfp_process >= parameters().m_memfp_threshold){
+                    m_stop_experiment = true;
+                    LOG("MEMORY THRESHOLD PASSED ( " <<  ComputerQuantity(parameters().m_memfp_threshold, true) << " ). Terminating the experiment ...");
+                    m_stop_reason = StopReason::MEMORY_FOOTPRINT;
+                }
+            }
+
+            if(now >= timeout){
+                m_stop_experiment = true;
+                LOG("TIMEOUT HIT, Terminating the experiment ... ");
+                m_stop_reason = StopReason::TIMEOUT_HIT;
+            }
         }
+    } while(!done && !m_stop_experiment);
 
-        // wait the workers to terminate
+    if(m_stop_experiment){ // wait the workers to terminate
         for(auto& w : m_workers) w->wait();
     }
+}
+
+void Aging2Master::cooloff(std::chrono::steady_clock::time_point start){
+    if(m_parameters.m_cooloff.count() == 0) return; // nothing to do
+    const bool report_memfp = parameters().m_report_memory_footprint;
+    const bool measure_memfp = parameters().m_memfp;
+    const bool measure_physical_memory = parameters().m_memfp_physical;
+
+    LOG("[Aging2] Cool-off period of " << m_parameters.m_cooloff.count() << " seconds ... ");
+    auto now = chrono::steady_clock::now();
+    const auto end = now + m_parameters.m_cooloff;
+    chrono::seconds next_tick { chrono::duration_cast<chrono::seconds>(now - start) +1s };
+    do {
+        this_thread::sleep_until(start + next_tick);
+        uint64_t memfp_process = measure_physical_memory ? common::get_memory_footprint() : max<int64_t>(utility::MemoryUsage::memory_footprint(), 0);
+        uint64_t memfp_driver = memory_footprint();
+        Aging2Result::MemoryFootprint memfp { static_cast<uint64_t>(next_tick.count()), memfp_process, memfp_driver, /* cool off ? */ true };
+        if(measure_memfp) { m_results.m_memory_footprint.push_back(memfp); }
+        if(report_memfp){ LOG("Memory footprint (cool-off) after " << DurationQuantity( (uint64_t) next_tick.count() ) << ": " << ComputerQuantity(memfp_process - memfp_driver, true) ); }
+        next_tick += 1s;
+
+        now = chrono::steady_clock::now();
+    } while( now < end );
+
+    LOG("[Aging2] Cool-off period terminated");
 }
 
 void Aging2Master::store_results(){
@@ -309,7 +360,8 @@ void Aging2Master::store_results(){
         delete[] m_latencies; m_latencies = nullptr; // free some memory
     }
 
-    m_results.m_timeout = m_stop_experiment;
+    m_results.m_timeout_hit = (m_stop_reason == StopReason::TIMEOUT_HIT);
+    m_results.m_memfp_threshold_passed  = (m_stop_reason == StopReason::MEMORY_FOOTPRINT);
 }
 
 void Aging2Master::log_num_vtx_edges(){
@@ -335,6 +387,30 @@ void Aging2Master::set_random_vertex_id(uint64_t* edges, uint64_t num_edges){
 
     if(i < num_edges)
         m_results.m_random_vertex_id = sources[i];
+}
+
+uint64_t Aging2Master::memory_footprint() const {
+    uint64_t result = 0;
+    // workers
+    for(auto& w: m_workers){ result += w->memory_footprint(); }
+
+    // size of the internal vectors
+    if(parameters().m_memfp_physical){ // physical memory
+        //result += sizeof(uint64_t) * static_cast<uint64_t>( m_parameters.m_num_reports_per_operations * ::ceil( static_cast<double>(num_operations_total())/num_edges_final_graph()) + 1 );
+        result += m_results.m_progress.size() * sizeof(m_results.m_progress[0]);
+        result += m_results.m_memory_footprint.size() * sizeof(m_results.m_memory_footprint[0]);
+        if(m_latencies != nullptr){
+            result += sizeof(uint64_t) * m_results.m_num_operations_total;
+        }
+    } else { // virtual memory
+        result += utility::MemoryUsage::get_allocated_space(m_results.m_progress.data());
+        result += utility::MemoryUsage::get_allocated_space(m_results.m_memory_footprint.data());
+        if(m_latencies != nullptr){
+            result += utility::MemoryUsage::get_allocated_space(m_latencies);
+        }
+    }
+
+    return result;
 }
 
 } // namespace

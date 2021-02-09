@@ -145,6 +145,11 @@ public:
     // To assess the overhead of the compaction phase in LLAMA
     virtual void updates_start();
     virtual void updates_stop();
+
+    /**
+     * Check whether we are allowed to validate the updates performed
+     */
+    virtual bool can_be_validated() const;
 };
 
 /**
@@ -156,6 +161,17 @@ public:
      * Load the whole graph representation from the given path
      */
     virtual void load(const std::string& path) = 0;
+};
+
+/**
+ * Retrieve a random vertex ID
+ */
+class RandomVertexInterface : public virtual Interface {
+public:
+    /**
+     * Get a random vertex ID
+     */
+    virtual uint64_t get_random_vertex_id() const = 0;
 };
 
 /**
@@ -239,11 +255,6 @@ public:
         double m_weight; // if < 0, this is an edge removal, otherwise it's an edge insertion with the given weight
     };
     virtual bool batch(const SingleUpdate* array, size_t array_sz, bool force = true);
-
-    /**
-     * Check whether we are allowed to validate the updates performed
-     */
-    virtual bool can_be_validated() const;
 };
 
 /**

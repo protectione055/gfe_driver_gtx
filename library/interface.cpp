@@ -31,6 +31,7 @@
 #include "common/timer.hpp"
 
 #include "baseline/adjacency_list.hpp"
+#include "baseline/csr.hpp"
 #include "baseline/dummy.hpp"
 #if defined(HAVE_LLAMA)
 #include "llama/llama_class.hpp"
@@ -45,9 +46,11 @@
 #if defined(HAVE_GRAPHONE)
 #include "graphone/graphone.hpp"
 #endif
+#if defined(HAVE_LIVEGRAPH)
+#include "livegraph/livegraph_driver.hpp"
+#endif
 #if defined(HAVE_TESEO)
 #include "teseo/teseo_driver.hpp"
-#include "teseo/teseo_lcc.hpp"
 #include "teseo/teseo_real_vtx.hpp"
 #endif
 
@@ -83,6 +86,23 @@ ImplementationManifest::ImplementationManifest(const string& name, const string&
 
 std::unique_ptr<Interface> generate_baseline_adjlist(bool directed_graph){ // directed or undirected graph
     return unique_ptr<Interface>{ new AdjacencyList(directed_graph) };
+}
+
+std::unique_ptr<Interface> generate_baseline_adjlist_no_ts(bool directed_graph){
+    return unique_ptr<Interface>{ new AdjacencyList(directed_graph, /* thread safe ? */ false) };
+}
+
+std::unique_ptr<Interface> generate_csr(bool directed_graph){
+    return unique_ptr<Interface>{ new CSR(directed_graph, /* numa interleaved ? */ false) };
+}
+std::unique_ptr<Interface> generate_csr_lcc(bool directed_graph){
+    return unique_ptr<Interface>{ new CSR_LCC(directed_graph, /* numa interleaved ? */ false) };
+}
+std::unique_ptr<Interface> generate_csr_numa(bool directed_graph){
+    return unique_ptr<Interface>{ new CSR(directed_graph, /* numa interleaved ? */ true) };
+}
+std::unique_ptr<Interface> generate_csr_lcc_numa(bool directed_graph){
+    return unique_ptr<Interface>{ new CSR_LCC(directed_graph, /* numa interleaved ? */ true) };
 }
 
 std::unique_ptr<Interface> generate_dummy(bool directed_graph){
@@ -167,6 +187,15 @@ std::unique_ptr<Interface> generate_graphone_ref_ignore_build(bool directed_grap
 }
 #endif
 
+#if defined(HAVE_LIVEGRAPH)
+std::unique_ptr<Interface> generate_livegraph_ro(bool directed_graph){ // read only transactions for Graphalytics
+    return unique_ptr<Interface>( new LiveGraphDriver(directed_graph, /*read_only ? */ true));
+}
+std::unique_ptr<Interface> generate_livegraph_rw(bool directed_graph){ // read-write transactions for Graphalytics
+    return unique_ptr<Interface>( new LiveGraphDriver(directed_graph, /*read_only ? */ false));
+}
+#endif
+
 #if defined(HAVE_TESEO)
 std::unique_ptr<Interface> generate_teseo(bool directed_graph){
     return unique_ptr<Interface>{ new TeseoDriver(directed_graph) };
@@ -175,12 +204,14 @@ std::unique_ptr<Interface> generate_teseo_rw(bool directed_graph){
     return unique_ptr<Interface>{ new TeseoDriver(directed_graph, /* read only tx ? */ false ) };
 }
 std::unique_ptr<Interface> generate_teseo_lcc(bool directed_graph){ // LCC custom algorithm
-    return unique_ptr<Interface>{ new TeseoLCC(directed_graph) };
+    return unique_ptr<Interface>{ new TeseoDriverLCC(directed_graph) };
 }
 std::unique_ptr<Interface> generate_teseo_real_vtx(bool directed_graph){
     return unique_ptr<Interface>{ new TeseoRealVertices(directed_graph) };
 }
-
+std::unique_ptr<Interface> generate_teseo_real_vtx_lcc(bool directed_graph){
+    return unique_ptr<Interface>{ new TeseoRealVerticesLCC(directed_graph) };
+}
 #endif
 
 #if defined(HAVE_SORTLEDTON)
@@ -194,6 +225,12 @@ vector<ImplementationManifest> implementations() {
 
     // v2 25/06/2020: Updates, implicitly create a vertex referred in a new edge upon first reference with the method add_edge_v2
     result.emplace_back("baseline_v2", "Sequential baseline, based on adjacency list", &generate_baseline_adjlist);
+    result.emplace_back("baseline_seq", "Sequential baseline, non thread safe", &generate_baseline_adjlist_no_ts);
+
+    result.emplace_back("csr", "CSR baseline", &generate_csr);
+    result.emplace_back("csr-lcc", "CSR baseline, sort-merge impl for the LCC kernel", &generate_csr_lcc);
+    result.emplace_back("csr-numa", "CSR baseline, allocate the internal arrays using all NUMA nodes", &generate_csr_numa);
+    result.emplace_back("csr-lcc-numa", "CSR baseline, allocate the internal arrays using all NUMA nodes, sort-merge impl for the LCC kernel", &generate_csr_lcc_numa);
 
     // v2 25/06/2020: Updates, implicitly create a vertex referred in a new edge upon first reference with the method add_edge_v2
     result.emplace_back("dummy_v2", "Dummy implementation of the interface, all operations are nop", &generate_dummy);
@@ -213,9 +250,11 @@ vector<ImplementationManifest> implementations() {
 #if defined(HAVE_STINGER)
     // v2 12/06/2020: OMP dynamic scheduling in the Graphalytics kernels
     // v3 29/06/2020: add_edge_v2
-    result.emplace_back("stinger3", "Stinger library", &generate_stinger);
-    result.emplace_back("stinger3-dv", "Stinger with dense vertices", &generate_stinger_dv);
-    result.emplace_back("stinger3-ref", "Stinger with the GAPBS ref impl.", &generate_stinger_ref);
+    // v4 24/09/2020: do not use OpenMP in updates
+    // v5 26/09/2020: completely disable vertex deletions
+    result.emplace_back("stinger5", "Stinger library", &generate_stinger);
+    result.emplace_back("stinger5-dv", "Stinger with dense vertices", &generate_stinger_dv);
+    result.emplace_back("stinger5-ref", "Stinger with the GAPBS ref impl.", &generate_stinger_ref);
 #endif
 
 #if defined(HAVE_GRAPHONE)
@@ -232,6 +271,11 @@ vector<ImplementationManifest> implementations() {
     result.emplace_back("g1_v4-ref-ignore-build", "GraphOne, reference GAP BS for the Graphalytics algorithms", &generate_graphone_ref_ignore_build);
 #endif
 
+#if defined(HAVE_LIVEGRAPH)
+    result.emplace_back("livegraph_ro", "LiveGraph, use read-only transactions for the Graphalytics kernels", &generate_livegraph_ro);
+    result.emplace_back("livegraph_rw", "LiveGraph, use read-write transactions for the Graphalytics kernels", &generate_livegraph_rw);
+#endif
+
 #if defined(HAVE_TESEO)
     // v1 05/04/2020: initial version for evaluation
     // v2 28/04/2020: big rewrite: dense file, delayed rebalances, new leaf layout, new rebalancer logic. All experiments should be repeated, that is, ignore v1.
@@ -239,10 +283,15 @@ vector<ImplementationManifest> implementations() {
     // v4 15/06/2020: cursor state + support for R/W iterators. It only affects scans (Graphalytics & bm)
     // v5 26/06/2020: updates, implicitly create a vertex referred in a new edge upon first reference with the method add_edge_v2
     // v6 18/07/2020: vertex table
-    result.emplace_back("teseo.6", "Teseo", &generate_teseo);
-    result.emplace_back("teseo-rw.6", "Teseo. Use read-write transactions for graphalytics, to measure their overhead", &generate_teseo_rw);
-    result.emplace_back("teseo-lcc.6", "Teseo with a tuned implementation of the LCC kernel", &generate_teseo_lcc);
-    result.emplace_back("teseo-dv.6", "Teseo, dense vertices", &generate_teseo_real_vtx);
+    // v7 08/11/2020: vertical partitioning
+    // v8 23/11/2020: variable length leaves
+    // v9 07/01/2021: bug fixes
+    // v10 08/01/2021: set the thread affinity by default
+    result.emplace_back("teseo.10", "Teseo", &generate_teseo);
+    result.emplace_back("teseo-rw.10", "Teseo. Use read-write transactions for graphalytics, to measure their overhead", &generate_teseo_rw);
+    result.emplace_back("teseo-lcc.10", "Teseo with a tuned implementation of the LCC kernel", &generate_teseo_lcc);
+    result.emplace_back("teseo-dv.10", "Teseo, dense vertices", &generate_teseo_real_vtx);
+    result.emplace_back("teseo-lcc-dv.10", "Teseo, dense vertices and sort-merge implementation of the LCC kernel", &generate_teseo_real_vtx_lcc);
 #endif
 
 #if defined(HAVE_SORTLEDTON)
@@ -287,6 +336,10 @@ bool Interface::is_undirected() const {
 void Interface::updates_start() { }
 
 void Interface::updates_stop() { }
+
+bool Interface::can_be_validated() const {
+    return true;
+}
 
 /*****************************************************************************
  *                                                                           *
@@ -360,10 +413,6 @@ void UpdateInterface::load(const string& path) {
 
 void UpdateInterface::build(){
     /* nop */
-}
-
-bool UpdateInterface::can_be_validated() const {
-    return true;
 }
 
 uint64_t UpdateInterface::num_levels() const {

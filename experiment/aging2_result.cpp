@@ -53,7 +53,8 @@ void Aging2Result::save(common::Database* handle) {
     db.add("num_build_invocations", m_num_build_invocations);
     db.add("num_snapshots_created", m_num_levels_created);
     db.add("completion_time", m_completion_time); // microseconds
-    db.add("timeout", (int64_t) m_timeout);
+    db.add("has_terminated_for_timeout", (int64_t) m_timeout_hit);
+    db.add("has_terminated_for_memfp", (int64_t) m_memfp_threshold_passed);
 
     for(int i = 0, sz = m_reported_times.size(); i < sz; i++){
         if(m_reported_times[i] == 0) continue; // missing??
@@ -66,6 +67,14 @@ void Aging2Result::save(common::Database* handle) {
         auto db = handle->add("aging_intermediate_throughput3");
         db.add("second", (int64_t) i +1); // 1, 2, 3...
         db.add("num_operations", m_progress[i]);
+    }
+
+    for(auto record: m_memory_footprint){
+        auto db = handle->add("aging_intermediate_memory_usage_v2");
+        db.add("tick", record.m_tick );
+        db.add("memfp_process", record.m_memory_process );
+        db.add("memfp_driver", record.m_memory_driver );
+        db.add("cooloff", (int64_t) record.m_is_cooloff);
     }
 
     if(m_latency_stats.get() != nullptr){
