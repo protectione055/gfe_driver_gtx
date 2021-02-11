@@ -391,11 +391,18 @@ namespace gfe::library {
       handle.close();
     }
 
+    bool SortledtonDriver::gced = false;
     void SortledtonDriver::bfs(uint64_t source_vertex_id, const char *dump2file) {
       utility::TimeoutService tcheck{m_timeout};
       common::Timer timer;
       timer.start();
 
+      // TODO GC could be parallelized
+      if (!gced) {
+        ds->gc_all();
+        cout << "gc done after " << timer << endl;
+        gced = true;
+      }
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
 
       // execute the BFS algorithm

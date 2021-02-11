@@ -11,6 +11,8 @@
 
 namespace gfe::library {
 
+    // TODO can i implement reuse of transactions?
+
     class SortledtonDriver : public virtual UpdateInterface, public virtual GraphalyticsInterface {
         SortledtonDriver(const SortledtonDriver &) = delete;
 
@@ -156,6 +158,7 @@ namespace gfe::library {
          */
         virtual void sssp(uint64_t source_vertex_id, const char *dump2file = nullptr);
 
+        static bool gced;
     };
 
 }

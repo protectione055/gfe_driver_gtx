@@ -17,8 +17,8 @@ namespace gfe::reader {
     class BinaryReader : public Reader {
 
         struct edge_t {
-            uint32_t src;
-            uint32_t dst;
+            uint64_t src;
+            uint64_t dst;
         };
 
         vector <edge_t> edges;  // vector to load edges into
