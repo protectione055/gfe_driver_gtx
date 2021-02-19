@@ -184,9 +184,6 @@ namespace gfe::library {
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
       tx.use_vertex_does_not_exists_semantics();
 
-      EdgeDoesNotExistsPrecondition p(internal_edge);
-      tx.register_precondition(&p);
-
       tx.insert_vertex(internal_edge.src);
       tx.insert_vertex(internal_edge.dst);
 
@@ -212,32 +209,32 @@ namespace gfe::library {
     ****************************************************************************/
     namespace { // anonymous
 
-      /*
-      GAP Benchmark Suite
-      Kernel: Breadth-First Search (BFS)
-      Author: Scott Beamer
-      Will return parent array for a BFS traversal from a source vertex
-      This BFS implementation makes use of the Direction-Optimizing approach [1].
-      It uses the alpha and beta parameters to determine whether to switch search
-      directions. For representing the frontier, it uses a SlidingQueue for the
-      top-down approach and a Bitmap for the bottom-up approach. To reduce
-      false-sharing for the top-down approach, thread-local QueueBuffer's are used.
-      To save time computing the number of edges exiting the frontier, this
-      implementation precomputes the degrees in bulk at the beginning by storing
-      them in parent array as negative numbers. Thus the encoding of parent is:
-        parent[x] < 0 implies x is unvisited and parent[x] = -out_degree(x)
-        parent[x] >= 0 implies x been visited
-      [1] Scott Beamer, Krste Asanović, and David Patterson. "Direction-Optimizing
-          Breadth-First Search." International Conference on High Performance
-          Computing, Networking, Storage and Analysis (SC), Salt Lake City, Utah,
-          November 2012.
-      */
+        /*
+        GAP Benchmark Suite
+        Kernel: Breadth-First Search (BFS)
+        Author: Scott Beamer
+        Will return parent array for a BFS traversal from a source vertex
+        This BFS implementation makes use of the Direction-Optimizing approach [1].
+        It uses the alpha and beta parameters to determine whether to switch search
+        directions. For representing the frontier, it uses a SlidingQueue for the
+        top-down approach and a Bitmap for the bottom-up approach. To reduce
+        false-sharing for the top-down approach, thread-local QueueBuffer's are used.
+        To save time computing the number of edges exiting the frontier, this
+        implementation precomputes the degrees in bulk at the beginning by storing
+        them in parent array as negative numbers. Thus the encoding of parent is:
+          parent[x] < 0 implies x is unvisited and parent[x] = -out_degree(x)
+          parent[x] >= 0 implies x been visited
+        [1] Scott Beamer, Krste Asanović, and David Patterson. "Direction-Optimizing
+            Breadth-First Search." International Conference on High Performance
+            Computing, Networking, Storage and Analysis (SC), Salt Lake City, Utah,
+            November 2012.
+        */
 
-      static int64_t BUStep(VersioningBlockedSkipListAdjacencyList* ds, SnapshotTransaction& tx, pvector <int64_t> &distances, int64_t distance, Bitmap &front, Bitmap &next) {
+        static int64_t BUStep(VersioningBlockedSkipListAdjacencyList *ds, SnapshotTransaction &tx, pvector <int64_t> &distances, int64_t distance, Bitmap &front, Bitmap &next) {
           const int64_t N = tx.vertex_count();
           int64_t awake_count = 0;
           next.reset();
-          #pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024) firstprivate(tx)
+#pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024)
           for (int64_t u = 0; u < N; u++) {
             if (distances[u] < 0) { // the node has not been visited yet
               bool done = false;
@@ -258,10 +255,10 @@ namespace gfe::library {
           return awake_count;
         }
 
-        static int64_t TDStep(VersioningBlockedSkipListAdjacencyList* ds, SnapshotTransaction& tx, pvector <int64_t> &distances, int64_t distance, SlidingQueue <int64_t> &queue) {
+        static int64_t TDStep(VersioningBlockedSkipListAdjacencyList *ds, SnapshotTransaction &tx, pvector <int64_t> &distances, int64_t distance, SlidingQueue <int64_t> &queue) {
           int64_t scout_count = 0;
 
-          #pragma omp parallel firstprivate(tx)
+          #pragma omp parallel
           {
             QueueBuffer <int64_t> lqueue(queue);
             #pragma omp for reduction(+ : scout_count)
@@ -293,26 +290,28 @@ namespace gfe::library {
           }
         }
 
-        static void BitmapToQueue(SnapshotTransaction& tx, const Bitmap &bm, SlidingQueue <int64_t> &queue) {
+        static void BitmapToQueue(SnapshotTransaction &tx, const Bitmap &bm, SlidingQueue <int64_t> &queue) {
           const int64_t N = tx.vertex_count();
 
           #pragma omp parallel
           {
             QueueBuffer <int64_t> lqueue(queue);
             #pragma omp for
-            for (int64_t n = 0; n < N; n++)
-              if (bm.get_bit(n))
+            for (int64_t n = 0; n < N; n++) {
+              if (bm.get_bit(n)) {
                 lqueue.push_back(n);
+              }
+            }
             lqueue.flush();
           }
           queue.slide_window();
         }
 
-        static pvector <int64_t> InitDistances(SnapshotTransaction& tx) {
+        static pvector <int64_t> InitDistances(SnapshotTransaction &tx) {
           const int64_t N = tx.vertex_count();
           pvector <int64_t> distances(N);
 
-          #pragma omp parallel for firstprivate(tx)
+          #pragma omp parallel for
           for (int64_t n = 0; n < N; n++) {
             int64_t out_degree = tx.neighbourhood_size(n);
             distances[n] = out_degree != 0 ? -out_degree : -1;
@@ -366,7 +365,7 @@ namespace gfe::library {
       return distances;
     }
 
-    static void save_bfs(libcuckoo::cuckoohash_map<uint64_t, int64_t> &result, const char *dump2file) {
+    static void save_bfs(libcuckoo::cuckoohash_map <uint64_t, int64_t> &result, const char *dump2file) {
       assert(dump2file != nullptr);
       COUT_DEBUG("save the results to: " << dump2file)
 
@@ -391,7 +390,44 @@ namespace gfe::library {
       handle.close();
     }
 
+    static void check_bfs(vertex_id_t start_vertex, vector <uint> &distances) {
+      const string gold_standard_directory = "/space/fuchs/shared/graph_two_gold_standards";
+
+      const string gold_standard_file =
+              gold_standard_directory + "/bfs_" + "live-journal-full-insert" + "_" + "0" + "_" +
+              "inserts" + ".goldStandard";
+
+      cout << "Validating bfs experiment against " << gold_standard_file << endl;
+      ifstream f(gold_standard_file, ifstream::in | ifstream::binary);
+
+      size_t size;
+      f.read((char *) &size, sizeof(size));
+      cout << "Expected size " << size << endl;
+      cout << "Actual size " << distances.size();
+//      assert(size == distances.size());
+
+      uint e;
+      int i = 0;
+      int errors = 0;
+      for (auto d : distances) {
+        f.read((char *) &e, sizeof(e));
+        if (d != e) {
+          errors++;
+//          if (errors < 100) {
+            cout << "i " << i << " d " << d << " e " << e << endl;
+//          }
+        }
+//        assert(d == e);
+        i += 1;
+      }
+      cout << "Total number of errors " << errors << endl;
+
+      f.close();
+    }
+
+
     bool SortledtonDriver::gced = false;
+
     void SortledtonDriver::bfs(uint64_t source_vertex_id, const char *dump2file) {
       utility::TimeoutService tcheck{m_timeout};
       common::Timer timer;
@@ -406,21 +442,33 @@ namespace gfe::library {
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
 
       // execute the BFS algorithm
-      auto result = sortledton_bfs(ds, tx, source_vertex_id, tcheck);
+      auto distances = sortledton_bfs(ds, tx, source_vertex_id, tcheck);
       if (tcheck.is_timeout()) { RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
 
-      // translate from llama vertex ids to external vertex ids
-      const uint64_t N = tx.vertex_count();
+
+      int N = distances.size();
+
+      // Check bfs algorithm
+//      vector <uint> ret(N);
+//#pragma omp parallel for
+//      for (int i = 0; i < N; i++) {
+//        if (distances[i] < 0) {
+//          ret[i] = numeric_limits<uint>::max();
+//        } else {
+//          ret[i] = distances[i];
+//        }
+//      }
+//      check_bfs(0, ret);
+
       libcuckoo::cuckoohash_map </* external id */ uint64_t, /* distance */ int64_t> external_ids;
-      #pragma omp parallel for firstprivate(tx)
+      #pragma omp parallel for
       for (uint64_t i = 0; i < N; i++) {
-        // second, what's it's real node ID, in the external domain (e.g. user id)
         uint64_t external_node_id = i;
 
-        // third, its distance
-        auto distance = result[i];
+        auto distance = distances[i];
 
-        // finally, register the association
+        cout << external_node_id << " " << distance << endl;
+
         external_ids.insert(external_node_id, distance);
       }
       tm.transactionCompleted(tx); // TODO do this in destructor finally.
@@ -428,9 +476,12 @@ namespace gfe::library {
       if (tcheck.is_timeout()) RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);
 
       // store the results in the given file
-      if (dump2file != nullptr)
+      if (dump2file != nullptr) {
         save_bfs(external_ids, dump2file); // TODO what needs to be saved
+      }
     }
+
+
 
     void SortledtonDriver::pagerank(uint64_t num_iterations, double damping_factor, const char *dump2file) {
       throw NotImplemented();
@@ -450,5 +501,9 @@ namespace gfe::library {
 
     void SortledtonDriver::sssp(uint64_t source_vertex_id, const char *dump2file) {
       throw NotImplemented();
+    }
+
+    bool SortledtonDriver::can_be_validated() const {
+     return true;
     }
 }

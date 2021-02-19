@@ -159,6 +159,8 @@ namespace gfe::library {
         virtual void sssp(uint64_t source_vertex_id, const char *dump2file = nullptr);
 
         static bool gced;
+
+        virtual bool can_be_validated() const;
     };
 
 }
