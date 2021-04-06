@@ -573,7 +573,7 @@ if ( test x"${with_sortledton}" != x"" && test x"${with_sortledton}" != "no" ); 
         AC_MSG_ERROR(["the full path to the Sortledton build needs to be specified, e.g. --with-sortledton=/path/to/sortledton/build"]);
     fi
 
-    MY_LIBEVENT()
+    MY_INTEL_TBB()
 
     path_sortledton=$(realpath "${with_sortledton}")
     path_sortledton_library="${path_sortledton}/libsortledton.a"

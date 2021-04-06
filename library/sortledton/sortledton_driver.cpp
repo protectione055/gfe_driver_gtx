@@ -11,7 +11,6 @@
 
 #include "common/timer.hpp"
 #include "third-party/gapbs/gapbs.hpp"
-#include "third-party/libcuckoo/cuckoohash_map.hh"
 #include "utility/timeout_service.hpp"
 
 #include "not_implemented.hpp"
@@ -19,8 +18,6 @@
 #include "data_types.h"
 #include "versioning/EdgeDoesNotExistsPrecondition.h"
 #include "versioning/VersionedEdgeIterator.h"
-
-using namespace gapbs;
 
 /*****************************************************************************
  *                                                                           *
@@ -39,12 +36,11 @@ namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
 
 namespace gfe::library {
 
-    SortledtonDriver::SortledtonDriver(bool is_graph_directed, bool sparse_graph, int block_size) : tm(1), m_is_directed(is_graph_directed) {
+    SortledtonDriver::SortledtonDriver(bool is_graph_directed, size_t properties_size, int block_size) : tm(1), m_is_directed(is_graph_directed) {
       if (is_graph_directed == true) {
         throw std::invalid_argument("Only undirected graphs are currently supported by the front-end");
       }
-      if (sparse_graph == true) { throw std::invalid_argument("Only dense graphs are supported by the front-end."); }
-      ds = new VersioningBlockedSkipListAdjacencyList(block_size, tm);
+      ds = new VersioningBlockedSkipListAdjacencyList(block_size, properties_size, tm);
     }
 
     SortledtonDriver::~SortledtonDriver() {
@@ -165,8 +161,8 @@ namespace gfe::library {
       // test
       bool inserted = true;
       try {
-        tx.insert_edge(internal_edge);
-        tx.insert_edge({internal_edge.dst, internal_edge.src});
+        tx.insert_edge(internal_edge, (char*) &e.m_weight, sizeof(e.m_weight));
+        tx.insert_edge({internal_edge.dst, internal_edge.src}, (char*) &e.m_weight, sizeof(e.m_weight));
         inserted &= tx.execute();
       } catch (exception &e) {
         inserted = false;
@@ -185,8 +181,8 @@ namespace gfe::library {
       tx.insert_vertex(internal_edge.src);
       tx.insert_vertex(internal_edge.dst);
 
-      tx.insert_edge({internal_edge.dst, internal_edge.src});
-      tx.insert_edge(internal_edge);
+      tx.insert_edge({internal_edge.dst, internal_edge.src}, (char*) &e.m_weight, sizeof(e.m_weight));
+      tx.insert_edge(internal_edge, (char*) &e.m_weight, sizeof(e.m_weight));
 
       bool inserted = true;
       inserted &= tx.execute();
@@ -229,7 +225,7 @@ namespace gfe::library {
         */
 
         static int64_t BUStep(VersioningBlockedSkipListAdjacencyList *ds, SnapshotTransaction &tx, pvector <int64_t> &distances, int64_t distance, Bitmap &front, Bitmap &next) {
-          const int64_t N = tx.vertex_count();
+          const int64_t N = tx.max_physical_vertex();
           int64_t awake_count = 0;
           next.reset();
 #pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024)
@@ -237,7 +233,7 @@ namespace gfe::library {
             if (distances[u] < 0) { // the node has not been visited yet
               bool done = false;
               sortledton_iterator iter(*ds);
-              tx.neighbourhood(u, iter);
+              tx.neighbourhood_p(u, iter);
               while (!done && iter.has_next()) {
                 dst_t n = iter.next();
                 if (front.get_bit(n)) {
@@ -264,7 +260,7 @@ namespace gfe::library {
               int64_t u = *q_iter;
 
               sortledton_iterator iter(*ds);
-              tx.neighbourhood(u, iter);
+              tx.neighbourhood_p(u, iter);
               while (iter.has_next()) {
                 dst_t destination = iter.next();
                 int64_t curr_val = distances[destination];
@@ -289,7 +285,7 @@ namespace gfe::library {
         }
 
         static void BitmapToQueue(SnapshotTransaction &tx, const Bitmap &bm, SlidingQueue <int64_t> &queue) {
-          const int64_t N = tx.vertex_count();
+          const int64_t N = tx.max_physical_vertex();
 
           #pragma omp parallel
           {
@@ -306,12 +302,12 @@ namespace gfe::library {
         }
 
         static pvector <int64_t> InitDistances(SnapshotTransaction &tx) {
-          const int64_t N = tx.vertex_count();
+          const int64_t N = tx.max_physical_vertex();
           pvector <int64_t> distances(N);
 
           #pragma omp parallel for
           for (int64_t n = 0; n < N; n++) {
-            int64_t out_degree = tx.neighbourhood_size(n);
+            int64_t out_degree = tx.neighbourhood_size_p(n);
             distances[n] = out_degree != 0 ? -out_degree : -1;
           }
           return distances;
@@ -326,7 +322,7 @@ namespace gfe::library {
       pvector <int64_t> distances = InitDistances(tx);
       distances[source] = 0;
 
-      uint64_t vertex_count = tx.vertex_count();
+      uint64_t vertex_count = tx.max_physical_vertex();
       SlidingQueue <int64_t> queue(vertex_count);
       queue.push_back(source);
       queue.slide_window();
@@ -335,7 +331,7 @@ namespace gfe::library {
       Bitmap front(vertex_count);
       front.reset();
       int64_t edges_to_check = tx.edge_count();  // TODO this could be a slow down given my implementation, we could sum up the adjacency set sizes in a parallel for loop
-      int64_t scout_count = tx.neighbourhood_size(source);
+      int64_t scout_count = tx.neighbourhood_size_p(source);
       int64_t distance = 1; // current distance
       while (!timer.is_timeout() && !queue.empty()) {
         if (scout_count > edges_to_check / alpha) {
@@ -437,12 +433,12 @@ namespace gfe::library {
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
 
       // execute the BFS algorithm
-      auto distances = sortledton_bfs(ds, tx, source_vertex_id, tcheck);
+      auto physical_source_vertex = tx.physical_id(source_vertex_id);
+      auto distances = sortledton_bfs(ds, tx, physical_source_vertex, tcheck);
       if (tcheck.is_timeout()) { RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
       cout << "BFS took " << timer << endl;
 
-      int N = distances.size();
-
+      auto external_ids = translate<int64_t>(tx, distances);
       // Check bfs algorithm
 //      vector <uint> ret(N);
 //#pragma omp parallel for
@@ -455,17 +451,7 @@ namespace gfe::library {
 //      }
 //      check_bfs(0, ret);
 
-      libcuckoo::cuckoohash_map </* external id */ uint64_t, /* distance */ int64_t> external_ids;
-      #pragma omp parallel for
-      for (uint64_t i = 0; i < N; i++) {
-        uint64_t external_node_id = i;
 
-        auto distance = distances[i];
-
-//        cout << external_node_id << " " << distance << endl;
-
-        external_ids.insert(external_node_id, distance);
-      }
       tm.transactionCompleted(tx); // TODO do this in destructor finally.
 
       if (tcheck.is_timeout()) RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);

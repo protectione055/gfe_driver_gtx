@@ -4,10 +4,15 @@
 
 #pragma once
 
+#include "third-party/libcuckoo/cuckoohash_map.hh"
+#include "third-party/gapbs/gapbs.hpp"
+
 #include "library/interface.hpp"
 
 #include "versioning/TransactionManager.h"
 #include "versioning/VersioningBlockedSkipListAdjacencyList.h"
+
+using namespace gapbs;
 
 namespace gfe::library {
 
@@ -26,9 +31,40 @@ namespace gfe::library {
         std::chrono::seconds m_timeout{0}; // the budget to complete each of the algorithms in the Graphalytics suite
         bool gced = false;
 
+        template <typename T>
+        libcuckoo::cuckoohash_map<uint64_t, T> translate(SnapshotTransaction& tx, pvector<T>& values) {
+          int N = values.size();
+          libcuckoo::cuckoohash_map < uint64_t, T> external_ids;
+#pragma omp parallel for
+          for (uint64_t i = 0; i < N; i++) {
+            uint64_t external_node_id = tx.logical_id(i);
+            auto distance = values[i];
+            external_ids.insert(external_node_id, distance);
+          }
+          return external_ids;
+
+//          auto start = chrono::steady_clock::now();
+//          vector<pair<vertex_id_t , T>> logical_result(values.size());
+//          auto V = values.size();
+//
+//#pragma omp parallel for
+//          for (uint v = 0; v <  V; v++) {
+//            if (ds.has_vertex_p(v)) {
+//              logical_result[v] = make_pair(ds.logical_id(v), values[v]);
+//            } else {
+//              logical_result[v] = make_pair(v, numeric_limits<T>::max());
+//            }
+//          }
+//          auto end = chrono::steady_clock::now();
+//          auto milliseconds = chrono::duration_cast<chrono::milliseconds>(end - start).count();
+//
+//          cout << "Translating took: " << milliseconds << " milliseconds" << endl;
+//          return logical_result;
+        }
+
     public:
 
-        SortledtonDriver(bool is_graph_directed, bool sparse_graph, int block_size);
+        SortledtonDriver(bool is_graph_directed, size_t properties_size, int block_size);
 
         /**
          * Destructor

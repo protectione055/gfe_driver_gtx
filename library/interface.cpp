@@ -216,7 +216,7 @@ std::unique_ptr<Interface> generate_teseo_real_vtx_lcc(bool directed_graph){
 
 #if defined(HAVE_SORTLEDTON)
 std::unique_ptr<Interface> generate_sortledton(bool directed_graph) {
-    return unique_ptr<Interface>{ new SortledtonDriver(directed_graph, false, 100000000, 1024) };
+    return unique_ptr<Interface>{ new SortledtonDriver(directed_graph, 8, 1024) };
 }
 #endif
 
