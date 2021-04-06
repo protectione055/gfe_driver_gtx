@@ -444,7 +444,7 @@ namespace gfe::library {
       // execute the BFS algorithm
       auto distances = sortledton_bfs(ds, tx, source_vertex_id, tcheck);
       if (tcheck.is_timeout()) { RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
-
+      cout << "BFS took " << timer << endl;
 
       int N = distances.size();
 
@@ -467,7 +467,7 @@ namespace gfe::library {
 
         auto distance = distances[i];
 
-        cout << external_node_id << " " << distance << endl;
+//        cout << external_node_id << " " << distance << endl;
 
         external_ids.insert(external_node_id, distance);
       }
