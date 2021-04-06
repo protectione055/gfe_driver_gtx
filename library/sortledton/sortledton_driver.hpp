@@ -24,10 +24,11 @@ namespace gfe::library {
         VersioningBlockedSkipListAdjacencyList* ds;
         const bool m_is_directed;
         std::chrono::seconds m_timeout{0}; // the budget to complete each of the algorithms in the Graphalytics suite
+        bool gced = false;
 
     public:
 
-        SortledtonDriver(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices, int block_size);
+        SortledtonDriver(bool is_graph_directed, bool sparse_graph, int block_size);
 
         /**
          * Destructor
@@ -157,8 +158,6 @@ namespace gfe::library {
          * @param dump2file if not null, dump the result in the given path, following the format expected by the benchmark specification
          */
         virtual void sssp(uint64_t source_vertex_id, const char *dump2file = nullptr);
-
-        static bool gced;
 
         virtual bool can_be_validated() const;
     };

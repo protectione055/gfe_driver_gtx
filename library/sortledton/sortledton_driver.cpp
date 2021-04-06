@@ -39,14 +39,12 @@ namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
 
 namespace gfe::library {
 
-    SortledtonDriver::SortledtonDriver(bool is_graph_directed, bool sparse_graph, uint64_t max_num_vertices,
-                                       int block_size) : tm(1), m_is_directed(is_graph_directed) {
+    SortledtonDriver::SortledtonDriver(bool is_graph_directed, bool sparse_graph, int block_size) : tm(1), m_is_directed(is_graph_directed) {
       if (is_graph_directed == true) {
         throw std::invalid_argument("Only undirected graphs are currently supported by the front-end");
       }
       if (sparse_graph == true) { throw std::invalid_argument("Only dense graphs are supported by the front-end."); }
       ds = new VersioningBlockedSkipListAdjacencyList(block_size, tm);
-      ds->reserve_vertices(max_num_vertices);
     }
 
     SortledtonDriver::~SortledtonDriver() {
@@ -424,9 +422,6 @@ namespace gfe::library {
 
       f.close();
     }
-
-
-    bool SortledtonDriver::gced = false;
 
     void SortledtonDriver::bfs(uint64_t source_vertex_id, const char *dump2file) {
       utility::TimeoutService tcheck{m_timeout};
