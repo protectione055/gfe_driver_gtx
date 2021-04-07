@@ -5,9 +5,9 @@
 #include "sortledton_driver.hpp"
 
 #include <chrono>
-#include <assert.h>
-#include <fstream>
 #include <omp.h>
+
+#include "third-party/gapbs/gapbs.hpp"
 
 #include "common/timer.hpp"
 #include "third-party/gapbs/gapbs.hpp"
@@ -18,20 +18,17 @@
 #include "data_types.h"
 #include "versioning/EdgeDoesNotExistsPrecondition.h"
 #include "versioning/VersionedEdgeIterator.h"
+#include "experiments/SSSP.h"
+#include "experiments/PageRank.h"
+#include "experiments/WCC.h"
+#include "experiments/CDLP.h"
+#include "experiments/LCC.h"
+#include "experiments/GAPBSAlgorithms.h"
 
-/*****************************************************************************
- *                                                                           *
- *  Debug                                                                    *
- *                                                                           *
- *****************************************************************************/
-//#define DEBUG
+using namespace gapbs;
+
+
 namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
-#define COUT_DEBUG_FORCE(msg) { std::scoped_lock<std::mutex> lock{::gfe::_log_mutex}; std::cout << "[TeseoDriver::" << __FUNCTION__ << "] " << msg << std::endl; }
-#if defined(DEBUG)
-#define COUT_DEBUG(msg) COUT_DEBUG_FORCE(msg)
-#else
-#define COUT_DEBUG(msg)
-#endif
 
 
 namespace gfe::library {
@@ -195,171 +192,14 @@ namespace gfe::library {
       throw NotImplemented();
     }
 
-
-    /*****************************************************************************
-    *                                                                           *
-    *  BFS                                                                      *
-    *                                                                           *
-    ****************************************************************************/
-    namespace { // anonymous
-
-        /*
-        GAP Benchmark Suite
-        Kernel: Breadth-First Search (BFS)
-        Author: Scott Beamer
-        Will return parent array for a BFS traversal from a source vertex
-        This BFS implementation makes use of the Direction-Optimizing approach [1].
-        It uses the alpha and beta parameters to determine whether to switch search
-        directions. For representing the frontier, it uses a SlidingQueue for the
-        top-down approach and a Bitmap for the bottom-up approach. To reduce
-        false-sharing for the top-down approach, thread-local QueueBuffer's are used.
-        To save time computing the number of edges exiting the frontier, this
-        implementation precomputes the degrees in bulk at the beginning by storing
-        them in parent array as negative numbers. Thus the encoding of parent is:
-          parent[x] < 0 implies x is unvisited and parent[x] = -out_degree(x)
-          parent[x] >= 0 implies x been visited
-        [1] Scott Beamer, Krste Asanović, and David Patterson. "Direction-Optimizing
-            Breadth-First Search." International Conference on High Performance
-            Computing, Networking, Storage and Analysis (SC), Salt Lake City, Utah,
-            November 2012.
-        */
-
-        static int64_t BUStep(VersioningBlockedSkipListAdjacencyList *ds, SnapshotTransaction &tx, pvector <int64_t> &distances, int64_t distance, Bitmap &front, Bitmap &next) {
-          const int64_t N = tx.max_physical_vertex();
-          int64_t awake_count = 0;
-          next.reset();
-#pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024)
-          for (int64_t u = 0; u < N; u++) {
-            if (distances[u] < 0) { // the node has not been visited yet
-              bool done = false;
-              sortledton_iterator iter(*ds);
-              tx.neighbourhood_p(u, iter);
-              while (!done && iter.has_next()) {
-                dst_t n = iter.next();
-                if (front.get_bit(n)) {
-                  distances[u] = distance; // on each BUStep, all nodes will have the same distance
-                  awake_count++;
-                  next.set_bit(u);
-                  done = true;
-                  iter.close();
-                }
-              }
-            }
-          }
-          return awake_count;
-        }
-
-        static int64_t TDStep(VersioningBlockedSkipListAdjacencyList *ds, SnapshotTransaction &tx, pvector <int64_t> &distances, int64_t distance, SlidingQueue <int64_t> &queue) {
-          int64_t scout_count = 0;
-
-          #pragma omp parallel
-          {
-            QueueBuffer <int64_t> lqueue(queue);
-            #pragma omp for reduction(+ : scout_count)
-            for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
-              int64_t u = *q_iter;
-
-              sortledton_iterator iter(*ds);
-              tx.neighbourhood_p(u, iter);
-              while (iter.has_next()) {
-                dst_t destination = iter.next();
-                int64_t curr_val = distances[destination];
-
-                if (curr_val < 0 && compare_and_swap(distances[destination], curr_val, distance)) {
-                  lqueue.push_back(destination);
-                  scout_count += -curr_val;
-                }
-              }
-            }
-            lqueue.flush();
-          }
-          return scout_count;
-        }
-
-        static void QueueToBitmap(const SlidingQueue <int64_t> &queue, Bitmap &bm) {
-          #pragma omp parallel for
-          for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
-            int64_t u = *q_iter;
-            bm.set_bit_atomic(u);
-          }
-        }
-
-        static void BitmapToQueue(SnapshotTransaction &tx, const Bitmap &bm, SlidingQueue <int64_t> &queue) {
-          const int64_t N = tx.max_physical_vertex();
-
-          #pragma omp parallel
-          {
-            QueueBuffer <int64_t> lqueue(queue);
-            #pragma omp for
-            for (int64_t n = 0; n < N; n++) {
-              if (bm.get_bit(n)) {
-                lqueue.push_back(n);
-              }
-            }
-            lqueue.flush();
-          }
-          queue.slide_window();
-        }
-
-        static pvector <int64_t> InitDistances(SnapshotTransaction &tx) {
-          const int64_t N = tx.max_physical_vertex();
-          pvector <int64_t> distances(N);
-
-          #pragma omp parallel for
-          for (int64_t n = 0; n < N; n++) {
-            int64_t out_degree = tx.neighbourhood_size_p(n);
-            distances[n] = out_degree != 0 ? -out_degree : -1;
-          }
-          return distances;
-        }
-
-    } // anon namespace
-
-    static pvector <int64_t> sortledton_bfs(VersioningBlockedSkipListAdjacencyList* ds, SnapshotTransaction& tx, int64_t source, utility::TimeoutService &timer, int alpha = 15, int beta = 18) {
-      // The implementation from GAP BS reports the parent (which indeed it should make more sense), while the one required by
-      // Graphalytics only returns the distance
-
-      pvector <int64_t> distances = InitDistances(tx);
-      distances[source] = 0;
-
-      uint64_t vertex_count = tx.max_physical_vertex();
-      SlidingQueue <int64_t> queue(vertex_count);
-      queue.push_back(source);
-      queue.slide_window();
-      Bitmap curr(vertex_count);
-      curr.reset();
-      Bitmap front(vertex_count);
-      front.reset();
-      int64_t edges_to_check = tx.edge_count();  // TODO this could be a slow down given my implementation, we could sum up the adjacency set sizes in a parallel for loop
-      int64_t scout_count = tx.neighbourhood_size_p(source);
-      int64_t distance = 1; // current distance
-      while (!timer.is_timeout() && !queue.empty()) {
-        if (scout_count > edges_to_check / alpha) {
-          int64_t awake_count, old_awake_count;
-          QueueToBitmap(queue, front);
-          awake_count = queue.size();
-          queue.slide_window();
-          do {
-            old_awake_count = awake_count;
-            awake_count = BUStep(ds, tx, distances, distance, front, curr);
-            front.swap(curr);
-            distance++;
-          } while ((awake_count >= old_awake_count) ||
-                   (awake_count > static_cast<int64_t>(vertex_count) / beta));
-          BitmapToQueue(tx, front, queue);
-          scout_count = 1;
-        } else {
-          edges_to_check -= scout_count;
-          scout_count = TDStep(ds, tx, distances, distance, queue);
-          queue.slide_window();
-          distance++;
-        }
+    void SortledtonDriver::run_gc() {
+      if (!gced) {
+        ds->gc_all();
+        gced = true;
       }
-
-      return distances;
     }
 
-    static void save_bfs(libcuckoo::cuckoohash_map <uint64_t, int64_t> &result, const char *dump2file) {
+    static void save_bfs(libcuckoo::cuckoohash_map <uint64_t, uint> &result, const char *dump2file) {
       assert(dump2file != nullptr);
       COUT_DEBUG("save the results to: " << dump2file)
 
@@ -372,10 +212,10 @@ namespace gfe::library {
         handle << p.first << " ";
 
         // if  the vertex was not reached, the algorithm sets its distance to < 0
-        if (p.second < 0) {
+        if (p.second == numeric_limits<uint>::max()) {
           handle << numeric_limits<int64_t>::max();
         } else {
-          handle << p.second;
+          handle << (int64_t) p.second;
         }
         handle << "\n";
       }
@@ -384,104 +224,101 @@ namespace gfe::library {
       handle.close();
     }
 
-    static void check_bfs(vertex_id_t start_vertex, vector <uint> &distances) {
-      const string gold_standard_directory = "/space/fuchs/shared/graph_two_gold_standards";
-
-      const string gold_standard_file =
-              gold_standard_directory + "/bfs_" + "live-journal-full-insert" + "_" + "0" + "_" +
-              "inserts" + ".goldStandard";
-
-      cout << "Validating bfs experiment against " << gold_standard_file << endl;
-      ifstream f(gold_standard_file, ifstream::in | ifstream::binary);
-
-      size_t size;
-      f.read((char *) &size, sizeof(size));
-      cout << "Expected size " << size << endl;
-      cout << "Actual size " << distances.size();
-//      assert(size == distances.size());
-
-      uint e;
-      int i = 0;
-      int errors = 0;
-      for (auto d : distances) {
-        f.read((char *) &e, sizeof(e));
-        if (d != e) {
-          errors++;
-//          if (errors < 100) {
-            cout << "i " << i << " d " << d << " e " << e << endl;
-//          }
-        }
-//        assert(d == e);
-        i += 1;
-      }
-      cout << "Total number of errors " << errors << endl;
-
-      f.close();
-    }
-
     void SortledtonDriver::bfs(uint64_t source_vertex_id, const char *dump2file) {
-      utility::TimeoutService tcheck{m_timeout};
-      common::Timer timer;
-      timer.start();
+      run_gc();
 
-      // TODO GC could be parallelized
-      if (!gced) {
-        ds->gc_all();
-        cout << "gc done after " << timer << endl;
-        gced = true;
-      }
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
 
-      // execute the BFS algorithm
-      auto physical_source_vertex = tx.physical_id(source_vertex_id);
-      auto distances = sortledton_bfs(ds, tx, physical_source_vertex, tcheck);
-      if (tcheck.is_timeout()) { RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
-      cout << "BFS took " << timer << endl;
-
-      auto external_ids = translate<int64_t>(tx, distances);
-      // Check bfs algorithm
-//      vector <uint> ret(N);
-//#pragma omp parallel for
-//      for (int i = 0; i < N; i++) {
-//        if (distances[i] < 0) {
-//          ret[i] = numeric_limits<uint>::max();
-//        } else {
-//          ret[i] = distances[i];
-//        }
-//      }
-//      check_bfs(0, ret);
+      auto physical_src = tx.physical_id(source_vertex_id);
 
 
-      tm.transactionCompleted(tx); // TODO do this in destructor finally.
+      auto distances = GAPBSAlgorithms::bfs(tx, physical_src, false);;
+      auto external_ids = translate<uint>(tx, distances);
 
-      if (tcheck.is_timeout()) RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);
+      tm.transactionCompleted(tx);
 
-      // store the results in the given file
       if (dump2file != nullptr) {
-        save_bfs(external_ids, dump2file); // TODO what needs to be saved
+        save_bfs(external_ids, dump2file);
       }
     }
 
 
 
     void SortledtonDriver::pagerank(uint64_t num_iterations, double damping_factor, const char *dump2file) {
-      throw NotImplemented();
+      run_gc();
+
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+
+      auto pr = PageRank::page_rank_bs(tx, num_iterations, damping_factor);;
+      auto external_ids = translate<double>(tx, pr);
+
+      tm.transactionCompleted(tx);
+
+      if (dump2file != nullptr) {
+        save_result<double>(external_ids, dump2file);
+      }
     }
 
     void SortledtonDriver::wcc(const char *dump2file) {
-      throw NotImplemented();
+      run_gc();
+
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+
+      auto clusters = WCC::gapbs_wcc(tx);
+      auto external_ids = translate<uint64_t>(tx, clusters);
+
+      tm.transactionCompleted(tx);
+
+      if (dump2file != nullptr) {
+        save_result<uint64_t>(external_ids, dump2file);
+      }
     }
 
     void SortledtonDriver::cdlp(uint64_t max_iterations, const char *dump2file) {
-      throw NotImplemented();
+      run_gc();
+
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+
+      auto clusters = CDLP::teseo_cdlp(tx, max_iterations);
+      auto external_ids = translate<uint64_t>(tx, clusters);
+
+      tm.transactionCompleted(tx);
+
+      if (dump2file != nullptr) {
+        save_result<uint64_t>(external_ids, dump2file);
+      }
     }
 
     void SortledtonDriver::lcc(const char *dump2file) {
-      throw NotImplemented();
+      run_gc();
+
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+
+      auto lcc_values = LCC::lcc_merge_sort(tx);
+      auto external_ids = translate<double>(tx, lcc_values);
+
+      tm.transactionCompleted(tx);
+
+      if (dump2file != nullptr) {
+        save_result<double>(external_ids, dump2file);
+      }
     }
 
     void SortledtonDriver::sssp(uint64_t source_vertex_id, const char *dump2file) {
-      throw NotImplemented();
+      run_gc();
+
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+      auto physical_src = tx.physical_id(source_vertex_id);
+
+      auto distances = SSSP::gabbs_sssp(tx, physical_src, 2.0);
+
+      auto external_ids = translate<double>(tx, distances);
+
+      tm.transactionCompleted(tx);
+
+      if (dump2file != nullptr) {
+        save_result<double>(external_ids, dump2file);
+      }
     }
 
     bool SortledtonDriver::can_be_validated() const {

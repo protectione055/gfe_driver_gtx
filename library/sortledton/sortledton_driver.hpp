@@ -4,17 +4,25 @@
 
 #pragma once
 
+#include <fstream>
+#include <assert.h>
+#include <vector>
+
 #include "third-party/libcuckoo/cuckoohash_map.hh"
-#include "third-party/gapbs/gapbs.hpp"
 
 #include "library/interface.hpp"
 
 #include "versioning/TransactionManager.h"
 #include "versioning/VersioningBlockedSkipListAdjacencyList.h"
 
-using namespace gapbs;
-
 namespace gfe::library {
+
+#define COUT_DEBUG_FORCE(msg) { std::scoped_lock<std::mutex> lock{::gfe::_log_mutex}; std::cout << "[TeseoDriver::" << __FUNCTION__ << "] " << msg << std::endl; }
+#if defined(DEBUG)
+#define COUT_DEBUG(msg) COUT_DEBUG_FORCE(msg)
+#else
+#define COUT_DEBUG(msg)
+#endif
 
     // TODO can i implement reuse of transactions?
 
@@ -32,7 +40,7 @@ namespace gfe::library {
         bool gced = false;
 
         template <typename T>
-        libcuckoo::cuckoohash_map<uint64_t, T> translate(SnapshotTransaction& tx, pvector<T>& values) {
+        libcuckoo::cuckoohash_map<uint64_t, T> translate(SnapshotTransaction& tx, vector<T>& values) {
           int N = values.size();
           libcuckoo::cuckoohash_map < uint64_t, T> external_ids;
 #pragma omp parallel for
@@ -61,6 +69,29 @@ namespace gfe::library {
 //          cout << "Translating took: " << milliseconds << " milliseconds" << endl;
 //          return logical_result;
         }
+
+        template <typename T>
+        void save_result(libcuckoo::cuckoohash_map <uint64_t, T> &result, const char *dump2file) {
+          assert(dump2file != nullptr);
+          COUT_DEBUG("save the results to: " << dump2file)
+
+          fstream handle(dump2file, ios_base::out);
+          if (!handle.good()) ERROR("Cannot save the result to `" << dump2file << "'");
+
+          auto list_entries = result.lock_table();
+
+          for (const auto &p : list_entries) {
+            handle << p.first << " ";
+            handle << p.second;
+            handle << "\n";
+          }
+
+          list_entries.unlock();
+          handle.close();
+        }
+
+        void run_gc();
+
 
     public:
 
