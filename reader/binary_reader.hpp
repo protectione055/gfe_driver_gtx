@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <string>
+#include <random>
 
 #include "reader.hpp"
 
@@ -36,6 +37,9 @@ namespace gfe::reader {
         bool read(graph::WeightedEdge &) override;
 
         bool is_directed() const override;
+
+    private:
+        std::mt19937_64 m_random_generator;
     };
 }
 

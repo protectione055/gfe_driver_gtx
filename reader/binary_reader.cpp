@@ -6,12 +6,13 @@
 
 #include <fstream>
 #include "graph/edge.hpp"
+#include "configuration.hpp"
 
 
 
 namespace gfe::reader {
 
-    BinaryReader::BinaryReader(const std::string &path) {
+    BinaryReader::BinaryReader(const std::string &path) : m_random_generator(configuration().seed() + 12908478) {
       ifstream f(path, ifstream::in | ifstream::binary);
 
       size_t edge_count;
@@ -35,7 +36,14 @@ namespace gfe::reader {
         pos += 1;
         edge.m_source = e.src;
         edge.m_destination = e.dst;
-        edge.m_weight = 1;
+
+        uniform_real_distribution<double> distribution{0, configuration().max_weight()}; // in [0, max_weight)
+        auto w = distribution(m_random_generator);
+        if(w == 0.0) {
+          w = configuration().max_weight(); // in (0, max_weight]
+        }
+
+        edge.m_weight = w;
         return true;
       } else {
         return false;
