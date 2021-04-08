@@ -777,7 +777,7 @@ static unique_ptr<uint64_t[]> teseo_cdlp(OpenMP& openmp, uint64_t max_iterations
         std::swap(labels0, labels1); // next iteration
         current_iteration++;
     }
-    cout << "Took iterations " << current_iteration << endl;
+
     if(labels0 == ptr_labels0.get()){
         return ptr_labels0;
     } else {
