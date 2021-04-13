@@ -137,7 +137,7 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
             try {
                 t_local.start();
                 interface->bfs(m_properties.bfs.m_source_vertex, path_result);
-                t_local.stop();
+              t_local.stop();
                 LOG(">> BFS Execution time: " << t_local);
                 m_exec_bfs.push_back(t_local.microseconds());
 

@@ -26,7 +26,7 @@
 #include "experiments/GAPBSAlgorithms.h"
 
 using namespace gapbs;
-
+using namespace common;
 
 namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
 
@@ -194,21 +194,21 @@ namespace gfe::library {
 
     void SortledtonDriver::run_gc() {
       if (!gced) {
+        Timer t; t.start();
         ds->gc_all();
         gced = true;
+        cout << "Running GC took: " << t;
       }
     }
 
-    static void save_bfs(libcuckoo::cuckoohash_map <uint64_t, uint> &result, const char *dump2file) {
+    static void save_bfs(vector<pair<uint64_t, uint>>& result, const char *dump2file) {
       assert(dump2file != nullptr);
       COUT_DEBUG("save the results to: " << dump2file)
 
       fstream handle(dump2file, ios_base::out);
       if (!handle.good()) ERROR("Cannot save the result to `" << dump2file << "'");
 
-      auto list_entries = result.lock_table();
-
-      for (const auto &p : list_entries) {
+      for (const auto &p : result) {
         handle << p.first << " ";
 
         // if  the vertex was not reached, the algorithm sets its distance to < 0
@@ -219,8 +219,6 @@ namespace gfe::library {
         }
         handle << "\n";
       }
-
-      list_entries.unlock();
       handle.close();
     }
 
@@ -228,13 +226,15 @@ namespace gfe::library {
       run_gc();
 
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
-
       auto physical_src = tx.physical_id(source_vertex_id);
 
+      Timer t; t.start();
+      auto distances = GAPBSAlgorithms::bfs(tx, physical_src, false);
 
-      auto distances = GAPBSAlgorithms::bfs(tx, physical_src, false);;
+      cout << "BFS took " << t << endl;
       auto external_ids = translate<uint>(tx, distances);
-
+      cout << "Translation took " << t << endl;
+      cout << "Size " << external_ids.size() << endl;
       tm.transactionCompleted(tx);
 
       if (dump2file != nullptr) {

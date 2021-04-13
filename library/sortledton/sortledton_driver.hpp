@@ -40,53 +40,35 @@ namespace gfe::library {
         bool gced = false;
 
         template <typename T>
-        libcuckoo::cuckoohash_map<uint64_t, T> translate(SnapshotTransaction& tx, vector<T>& values) {
+        vector<pair<uint64_t, T>> translate(SnapshotTransaction& tx, vector<T>& values) {
           int N = values.size();
-          libcuckoo::cuckoohash_map < uint64_t, T> external_ids;
-#pragma omp parallel for
-          for (uint64_t i = 0; i < N; i++) {
-            uint64_t external_node_id = tx.logical_id(i);
-            auto distance = values[i];
-            external_ids.insert(external_node_id, distance);
-          }
-          return external_ids;
 
-//          auto start = chrono::steady_clock::now();
-//          vector<pair<vertex_id_t , T>> logical_result(values.size());
-//          auto V = values.size();
-//
-//#pragma omp parallel for
-//          for (uint v = 0; v <  V; v++) {
-//            if (ds.has_vertex_p(v)) {
-//              logical_result[v] = make_pair(ds.logical_id(v), values[v]);
-//            } else {
-//              logical_result[v] = make_pair(v, numeric_limits<T>::max());
-//            }
-//          }
-//          auto end = chrono::steady_clock::now();
-//          auto milliseconds = chrono::duration_cast<chrono::milliseconds>(end - start).count();
-//
-//          cout << "Translating took: " << milliseconds << " milliseconds" << endl;
-//          return logical_result;
+          vector<pair<vertex_id_t , T>> logical_result(N);
+
+#pragma omp parallel for
+          for (uint v = 0; v <  N; v++) {
+            if (tx.has_vertex_p(v)) {
+              logical_result[v] = make_pair(tx.logical_id(v), values[v]);
+            } else {
+              logical_result[v] = make_pair(v, numeric_limits<T>::max());
+            }
+          }
+          return logical_result;
         }
 
         template <typename T>
-        void save_result(libcuckoo::cuckoohash_map <uint64_t, T> &result, const char *dump2file) {
+        void save_result(vector<pair<uint64_t, T>> &result, const char *dump2file) {
           assert(dump2file != nullptr);
           COUT_DEBUG("save the results to: " << dump2file)
 
           fstream handle(dump2file, ios_base::out);
           if (!handle.good()) ERROR("Cannot save the result to `" << dump2file << "'");
 
-          auto list_entries = result.lock_table();
-
-          for (const auto &p : list_entries) {
+          for (const auto &p : result) {
             handle << p.first << " ";
             handle << p.second;
             handle << "\n";
           }
-
-          list_entries.unlock();
           handle.close();
         }
 
