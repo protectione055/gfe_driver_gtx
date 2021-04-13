@@ -18,7 +18,28 @@
 #pragma once
 
 #include <chrono>
+#include <fstream>
+#include <vector>
+#include <omp.h>
 #include "library/interface.hpp"
+#include "teseo_openmp.hpp"
+
+using namespace std;
+
+/*****************************************************************************
+ *                                                                           *
+ *  Debug                                                                    *
+ *                                                                           *
+ *****************************************************************************/
+//#define DEBUG
+namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
+#define COUT_DEBUG_FORCE(msg) { std::scoped_lock<std::mutex> lock{::gfe::_log_mutex}; std::cout << "[TeseoDriver::" << __FUNCTION__ << "] " << msg << std::endl; }
+#if defined(DEBUG)
+#define COUT_DEBUG(msg) COUT_DEBUG_FORCE(msg)
+#else
+#define COUT_DEBUG(msg)
+#endif
+
 
 namespace gfe::library {
 
@@ -28,13 +49,39 @@ namespace gfe::library {
 class TeseoDriver : public virtual UpdateInterface, public virtual GraphalyticsInterface {
     TeseoDriver(const TeseoDriver&) = delete;
     TeseoDriver& operator=(const TeseoDriver&) = delete;
-
 protected:
     void* m_pImpl; // pointer to the teseo library
     const bool m_is_directed; // whether the underlying graph is directed or undirected
     const bool m_read_only; // whether to used read only transactions for graphalytics
     bool m_thread_affinity; // whether to enable the thread affinity in graphalytics
     std::chrono::seconds m_timeout { 0 }; // the budget to complete each of the algorithms in the Graphalytics suite
+
+    template <typename T>
+    vector<pair<uint64_t, T>> translate(gfe::library::teseo_driver_internal::OpenMP& openmp, T* values, int N) {
+      vector<pair<uint64_t , T>> logical_result(N);
+
+#pragma omp parallel for
+      for (int v = 0; v <  N; v++) {
+        logical_result[v] = make_pair(openmp.transaction().vertex_id(v), values[v]);
+      }
+      return logical_result;
+    }
+
+    template <typename T>
+    void save_result(vector<pair<uint64_t, T>> &result, const char *dump2file) {
+      assert(dump2file != nullptr);
+      COUT_DEBUG("save the results to: " << dump2file)
+
+      fstream handle(dump2file, ios_base::out);
+      if (!handle.good()) ERROR("Cannot save the result to `" << dump2file << "'");
+
+      for (auto p : result) {
+        handle << p.first << " ";
+        handle << p.second;
+        handle << "\n";
+      }
+      handle.close();
+    }
 
 public:
     /**
