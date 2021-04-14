@@ -60,7 +60,7 @@ protected:
     vector<pair<uint64_t, T>> translate(gfe::library::teseo_driver_internal::OpenMP& openmp, T* values, int N) {
       vector<pair<uint64_t , T>> logical_result(N);
 
-#pragma omp parallel for
+#pragma omp parallel for firstprivate(openmp)
       for (int v = 0; v <  N; v++) {
         logical_result[v] = make_pair(openmp.transaction().vertex_id(v), values[v]);
       }

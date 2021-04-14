@@ -390,7 +390,7 @@ void TeseoDriver::bfs(uint64_t source_vertex_id, const char* dump2file){
     const int64_t N = openmp.transaction().num_vertices();
     vector<pair<uint64_t , int64_t>> external_ids(N);
 
-    #pragma omp parallel for
+    #pragma omp parallel for firstprivate(openmp)
     for (uint v = 0; v <  N; v++) {
       external_ids[v] = make_pair(openmp.transaction().vertex_id(v), result[v]);
     }
@@ -972,7 +972,7 @@ void TeseoDriver::sssp(uint64_t source_vertex_id, const char* dump2file) {
     const uint64_t N = openmp.transaction().num_vertices();
     vector<pair<uint64_t , double>> logical_result(N);
 
-  #pragma omp parallel for
+  #pragma omp parallel for firstprivate(openmp)
     for (uint v = 0; v <  N; v++) {
       logical_result[v] = make_pair(openmp.transaction().vertex_id(v), distances[v]);
     }
