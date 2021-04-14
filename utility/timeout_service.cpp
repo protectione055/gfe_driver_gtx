@@ -53,10 +53,7 @@ void TimeoutService::main_thread(){
     bool terminate = false;
     while(!terminate){
         unique_lock<mutex> lock(m_mutex);
-        if (m_terminate) {  // Can happen if the order of calls is: start(); stop(); main_thread();
-          break;
-        }
-        m_condvar.wait_for(lock, 1s, [this](){ return !m_terminate; });
+        m_condvar.wait_for(lock, 1s, [this](){ return m_terminate; });
         terminate = m_terminate;
         lock.unlock();
 
