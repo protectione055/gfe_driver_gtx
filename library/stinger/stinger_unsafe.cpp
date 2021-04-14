@@ -123,7 +123,7 @@ template<typename T>
 void Stinger::to_external_ids(const T* __restrict internal_ids, size_t internal_ids_sz, vector<pair<uint64_t, T>>* external_ids){
     ASSERT(external_ids != nullptr);
 
-    external_ids.resize(iternal_ids_sz);
+    external_ids->resize(internal_ids_sz);
 
     #pragma omp parallel for
     for(uint64_t internal_id = 0; internal_id < internal_ids_sz; internal_id++){
@@ -133,7 +133,7 @@ void Stinger::to_external_ids(const T* __restrict internal_ids, size_t internal_
             if( rc == 0 ){ // mapping found
                 uint64_t external_id = stoull(vertex_id_name);
                 COUT_DEBUG("external_id: " << external_id << ", internal_id: " << internal_id);
-                external_ids[internal_id] = make_pair(external_id, internal_ids[internal_id]);
+              (*external_ids)[internal_id] = make_pair(external_id, internal_ids[internal_id]);
             }
             free(vertex_id_name); vertex_id_name = nullptr;
         }
