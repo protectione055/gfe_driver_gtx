@@ -5,6 +5,7 @@
 #include "sortledton_driver.hpp"
 
 #include <chrono>
+#include <optional>
 #include <omp.h>
 
 #include "third-party/gapbs/gapbs.hpp"
@@ -139,13 +140,21 @@ namespace gfe::library {
       throw NotImplemented();
     }
 
+
 /**
  * Adds a given edge to the graph if both vertices exists already
  */
     bool SortledtonDriver::add_edge(gfe::graph::WeightedEdge e) {
       assert(!m_is_directed);
       edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+
+      thread_local optional<SnapshotTransaction> tx_o = nullopt;
+      if (tx_o.has_value()) {
+        tm.getSnapshotTransaction(ds, *tx_o);
+      } else {
+        tx_o = tm.getSnapshotTransaction(ds);
+      }
+      auto tx = *tx_o;
 
       VertexExistsPrecondition pre_v1(internal_edge.src);
       tx.register_precondition(&pre_v1);
@@ -170,9 +179,17 @@ namespace gfe::library {
 
     bool SortledtonDriver::add_edge_v2(gfe::graph::WeightedEdge e) {
       assert(!m_is_directed);
+
+      thread_local optional<SnapshotTransaction> tx_o = nullopt;
+      if (tx_o.has_value()) {
+        tm.getSnapshotTransaction(ds, *tx_o);
+      } else {
+        tx_o = tm.getSnapshotTransaction(ds);
+      }
+      auto tx = *tx_o;
+
       edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
       tx.use_vertex_does_not_exists_semantics();
 
       tx.insert_vertex(internal_edge.src);
