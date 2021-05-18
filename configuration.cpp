@@ -125,6 +125,7 @@ void Configuration::initialise(int argc, char* argv[]){
         ("u, undirected", "Is the graph undirected? By default, it's considered directed.")
         ("v, validate", "Whether to validate the output results of the Graphalytics algorithms", value<string>()->implicit_value("<path>"))
         ("w, writers", "The number of client threads to use for the write operations", value<int>()->default_value(to_string(num_threads(THREADS_WRITE))))
+        ("b, block_size", "The block size for Sortledton to use.", value<int>()->default_value("1024"))
     ;
 
     try {
@@ -299,6 +300,10 @@ void Configuration::initialise(int argc, char* argv[]){
         if ( result["aging_timeout"].count() > 0 ){
             set_timeout_aging2( result["aging_timeout"].as<DurationQuantity>().as<chrono::seconds>().count() );
         }
+
+        if( result["block_size"].count() > 0 ){
+          set_block_size( result["block_size"].as<int>() );
+        }
     } catch ( argument_incorrect_type& e){
         ERROR(e.what());
     }
@@ -410,6 +415,10 @@ void Configuration::set_aging_memfp_threshold(uint64_t bytes){
     m_aging_memfp_threshold = bytes;
 }
 
+void Configuration::set_block_size(size_t block_size) {
+  m_block_size = block_size;
+}
+
 uint64_t Configuration::get_num_recordings_per_ops() const {
     double step_size = get_aging_step_size();
     if ( ::ceil(1.0/step_size) != ::floor(1.0/step_size) ){
@@ -461,6 +470,10 @@ void Configuration::blacklist(gfe::experiment::GraphalyticsAlgorithms& algorithm
     do_blacklist(algorithms.pagerank.m_enabled, "pagerank");
     do_blacklist(algorithms.sssp.m_enabled, "sssp");
     do_blacklist(algorithms.wcc.m_enabled, "wcc");
+}
+
+size_t Configuration::block_size() {
+  return m_block_size;
 }
 
 const std::string& Configuration::get_validation_graph() const {
@@ -533,6 +546,7 @@ void Configuration::save_parameters() {
     params.push_back(P{"validate_inserts", to_string(validate_inserts())});
     params.push_back(P{"validate_output", to_string(validate_output())});
     params.push_back(P{"validate_output_graph", get_validation_graph()});
+    params.push_back(P{"block_size", to_string(block_size())});
 
     if(!m_blacklist.empty()){
         stringstream ss;

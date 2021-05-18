@@ -33,6 +33,9 @@
 #include "baseline/adjacency_list.hpp"
 #include "baseline/csr.hpp"
 #include "baseline/dummy.hpp"
+
+#include "../configuration.hpp"
+
 #if defined(HAVE_LLAMA)
 #include "llama/llama_class.hpp"
 #include "llama/llama_ref.hpp"
@@ -216,7 +219,9 @@ std::unique_ptr<Interface> generate_teseo_real_vtx_lcc(bool directed_graph){
 
 #if defined(HAVE_SORTLEDTON)
 std::unique_ptr<Interface> generate_sortledton(bool directed_graph) {
-    return unique_ptr<Interface>{ new SortledtonDriver(directed_graph, 8, 1024) };
+    auto& config = configuration();
+    cout << "Running Sortledton with block size: " << config.block_size() << endl;
+    return unique_ptr<Interface>{ new SortledtonDriver(directed_graph, 8, config.block_size()) };
 }
 #endif
 

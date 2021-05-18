@@ -91,6 +91,7 @@ class Configuration {
     std::string m_validate_graph; // validate the results from graphalytics against the given graph
     bool m_validate_inserts = false; // whether to validate the edges inserted
     bool m_validate_output = false; // whether to validate the execution results of the Graphalytics algorithms
+    size_t m_block_size = 1024;  // Block size for Sortledton to use
 
     void set_aging_cooloff_seconds(uint64_t value);
     void set_aging_memfp_threshold(uint64_t bytes);
@@ -107,6 +108,7 @@ class Configuration {
     void set_timeout_aging2(uint64_t seconds); // Set the maximum amount of time (excl. cool-off time) to run the Aging2 experiment
     void set_timeout_graphalytics(uint64_t seconds); // Set the timeout property
     void set_graph(const std::string& graph); // Set the graph to load and run the experiments
+    void set_block_size(size_t block_size);
 
     // Set the path to the database
     void set_database_path(const std::string& path){ m_database_path = path; }
@@ -233,6 +235,8 @@ public:
 
     // Remove the algorithms blacklisted by the user in the GraphalyticsAlgorithms list
     void blacklist(gfe::experiment::GraphalyticsAlgorithms& algorithms) const;
+
+    size_t block_size();
 };
 
 } // namespace
