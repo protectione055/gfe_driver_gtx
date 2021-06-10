@@ -64,7 +64,7 @@ namespace gfe::library {
 
     uint64_t SortledtonDriver::num_edges() const {
       SortledtonDriver *non_const_this = const_cast<SortledtonDriver *>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds);
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, false);
       auto num_edges = tx.edge_count() / 2;
       non_const_this->tm.transactionCompleted(tx);
       return num_edges;
@@ -72,7 +72,7 @@ namespace gfe::library {
 
     uint64_t SortledtonDriver::num_vertices() const {
       SortledtonDriver *non_const_this = const_cast<SortledtonDriver *>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds);
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, false);
       auto num_vertices = tx.vertex_count();
       non_const_this->tm.transactionCompleted(tx);
       return num_vertices;
@@ -83,7 +83,7 @@ namespace gfe::library {
  */
     bool SortledtonDriver::has_vertex(uint64_t vertex_id) const {
       SortledtonDriver *non_const_this = const_cast<SortledtonDriver *>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds);  // TODO weights currently not supported
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, false);  // TODO weights currently not supported
       auto has_vertex = tx.has_vertex(vertex_id);
       non_const_this->tm.transactionCompleted(tx);
       return has_vertex;
@@ -94,10 +94,11 @@ namespace gfe::library {
  */
     double SortledtonDriver::get_weight(uint64_t source, uint64_t destination) const {
       SortledtonDriver *non_const_this = const_cast<SortledtonDriver *>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds);  // TODO weights currently not supported
-      auto has_edge = tx.has_edge({static_cast<dst_t>(source), static_cast<dst_t>(destination)});
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, false);  // TODO weights currently not supported
+      weight_t w;
+      auto has_edge = tx.get_weight({static_cast<dst_t>(source), static_cast<dst_t>(destination)}, (char*) &w);
       non_const_this->tm.transactionCompleted(tx);
-      return has_edge ? 0.0 : nan("");
+      return has_edge ? w : nan("");
     }
 
 /**
@@ -119,7 +120,7 @@ namespace gfe::library {
  * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)
  */
     bool SortledtonDriver::add_vertex(uint64_t vertex_id) {
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, true);
       bool inserted = true;
       try {
         tx.insert_vertex(vertex_id);
@@ -150,9 +151,9 @@ namespace gfe::library {
 
       thread_local optional<SnapshotTransaction> tx_o = nullopt;
       if (tx_o.has_value()) {
-        tm.getSnapshotTransaction(ds, *tx_o);
+        tm.getSnapshotTransaction(ds, true, *tx_o);
       } else {
-        tx_o = tm.getSnapshotTransaction(ds);
+        tx_o = tm.getSnapshotTransaction(ds, true);
       }
       auto tx = *tx_o;
 
@@ -182,9 +183,9 @@ namespace gfe::library {
 
       thread_local optional<SnapshotTransaction> tx_o = nullopt;
       if (tx_o.has_value()) {
-        tm.getSnapshotTransaction(ds, *tx_o);
+        tm.getSnapshotTransaction(ds, true, *tx_o);
       } else {
-        tx_o = tm.getSnapshotTransaction(ds);
+        tx_o = tm.getSnapshotTransaction(ds, true);
       }
       auto tx = *tx_o;
 
@@ -206,7 +207,27 @@ namespace gfe::library {
     }
 
     bool SortledtonDriver::remove_edge(gfe::graph::Edge e) {
-      throw NotImplemented();
+      assert(!m_is_directed);
+
+      thread_local optional<SnapshotTransaction> tx_o = nullopt;
+      if (tx_o.has_value()) {
+        tm.getSnapshotTransaction(ds, true, *tx_o);
+      } else {
+        tx_o = tm.getSnapshotTransaction(ds, true);
+      }
+      auto tx = *tx_o;
+
+      edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
+
+      tx.delete_edge({internal_edge.dst, internal_edge.src});
+      tx.delete_edge(internal_edge);
+
+      bool removed = true;
+      removed &= tx.execute();
+
+      tm.transactionCompleted(tx);
+      return removed;
+      ;
     }
 
     void SortledtonDriver::run_gc() {
@@ -240,9 +261,10 @@ namespace gfe::library {
     }
 
     void SortledtonDriver::bfs(uint64_t source_vertex_id, const char *dump2file) {
+      tm.register_thread(0);
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
       auto physical_src = tx.physical_id(source_vertex_id);
 
       Timer t; t.start();
@@ -257,14 +279,16 @@ namespace gfe::library {
       if (dump2file != nullptr) {
         save_bfs(external_ids, dump2file);
       }
+      tm.deregister_thread(0);
     }
 
 
 
     void SortledtonDriver::pagerank(uint64_t num_iterations, double damping_factor, const char *dump2file) {
+      tm.register_thread(0);
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
       auto pr = PageRank::page_rank_bs(tx, num_iterations, damping_factor);;
       auto external_ids = translate<double>(tx, pr);
@@ -274,12 +298,14 @@ namespace gfe::library {
       if (dump2file != nullptr) {
         save_result<double>(external_ids, dump2file);
       }
+      tm.deregister_thread(0);
     }
 
     void SortledtonDriver::wcc(const char *dump2file) {
+      tm.register_thread(0);
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
       auto clusters = WCC::gapbs_wcc(tx);
       auto external_ids = translate<uint64_t>(tx, clusters);
@@ -289,12 +315,14 @@ namespace gfe::library {
       if (dump2file != nullptr) {
         save_result<uint64_t>(external_ids, dump2file);
       }
+      tm.deregister_thread(0);
     }
 
     void SortledtonDriver::cdlp(uint64_t max_iterations, const char *dump2file) {
+      tm.register_thread(0);
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
       auto clusters = CDLP::teseo_cdlp(tx, max_iterations);
       auto external_ids = translate<uint64_t>(tx, clusters);
@@ -304,12 +332,14 @@ namespace gfe::library {
       if (dump2file != nullptr) {
         save_result<uint64_t>(external_ids, dump2file);
       }
+      tm.deregister_thread(0);
     }
 
     void SortledtonDriver::lcc(const char *dump2file) {
+      tm.register_thread(0);
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
       auto lcc_values = LCC::lcc_merge_sort(tx);
       auto external_ids = translate<double>(tx, lcc_values);
@@ -319,12 +349,14 @@ namespace gfe::library {
       if (dump2file != nullptr) {
         save_result<double>(external_ids, dump2file);
       }
+      tm.deregister_thread(0);
     }
 
     void SortledtonDriver::sssp(uint64_t source_vertex_id, const char *dump2file) {
+      tm.register_thread(0);
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
       auto physical_src = tx.physical_id(source_vertex_id);
 
       auto distances = SSSP::gabbs_sssp(tx, physical_src, 2.0);
@@ -336,6 +368,7 @@ namespace gfe::library {
       if (dump2file != nullptr) {
         save_result<double>(external_ids, dump2file);
       }
+      tm.deregister_thread(0);
     }
 
     bool SortledtonDriver::can_be_validated() const {
