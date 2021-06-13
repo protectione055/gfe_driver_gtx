@@ -40,27 +40,32 @@ uint64_t validate_updates(shared_ptr<gfe::library::Interface> ptr_interface, sha
 
         for(uint64_t i = from; i < to; i++){
             auto edge = stream->get(i);
-//            auto w1 = interface->get_weight(edge.source(), edge.destination());
-//            if(w1 != edge.m_weight){
-//                LOG("ERROR [" << i << "] Edge mismatch " << edge.source() << " -> " << edge.destination() << ", retrieved weight: " << w1 << ", expected: " << edge.weight());
-//                num_errors++;
-//            }
-          // TODO support weights
-          auto w1 = interface->has_edge(edge.source(), edge.destination());
-            if(!w1){
+            if (interface->has_weights()) {
+              auto w1 = interface->get_weight(edge.source(), edge.destination());
+              if(w1 != edge.m_weight){
                 LOG("ERROR [" << i << "] Edge mismatch " << edge.source() << " -> " << edge.destination() << ", retrieved weight: " << w1 << ", expected: " << edge.weight());
                 num_errors++;
-            }
-            if(interface->is_undirected()){
-//              auto w2 = interface->get_weight(edge.destination(), edge.source());
-//              if(w2 != edge.m_weight){
-//                  LOG("ERROR [" << i << "] Edge mismatch " << edge.source() << " <- " << edge.destination() << ", retrieved weight: " << w1 << ", expected: " << edge.weight());
-//                    num_errors++;
-//                }
-              auto w1 = interface->has_edge(edge.destination(), edge.source());
-              if (!w1) {
-                LOG("ERROR [" << i << "] Edge mismatch " << edge.source() << " <- " << edge.destination() << ", retrieved weight: " << w1 << ", expected: " << edge.weight());
-                num_errors++;
+              }
+              if(interface->is_undirected()){
+                auto w2 = interface->get_weight(edge.destination(), edge.source());
+                if(w2 != edge.m_weight){
+                  LOG("ERROR [" << i << "] Edge mismatch " << edge.source() << " <- " << edge.destination() << ", retrieved weight: " << w1 << ", expected: " << edge.weight());
+                  num_errors++;
+                }
+              }
+            } else {
+              auto w1 = interface->has_edge(edge.source(), edge.destination());
+              if(!w1){
+                  LOG("ERROR [" << i << "] Edge mismatch " << edge.source() << " -> " << edge.destination() << ", retrieved weight: " << w1 << ", expected: " << edge.weight());
+                  num_errors++;
+              }
+              if(interface->is_undirected()) {
+                auto w2 = interface->has_edge(edge.destination(), edge.source());
+                if (!w2) {
+                  LOG("ERROR [" << i << "] Edge mismatch " << edge.source() << " <- " << edge.destination()
+                                << ", retrieved weight: " << w1 << ", expected: " << edge.weight());
+                  num_errors++;
+                }
               }
             }
         }

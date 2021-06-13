@@ -61,6 +61,10 @@
 #include "sortledton/sortledton_driver.hpp"
 #endif
 
+#if defined(HAVE_MICROBENCHMARKS)
+#include "microbenchmarks/microbenchmarks_driver.hpp"
+#endif
+
 using namespace std;
 
 /*****************************************************************************
@@ -225,6 +229,14 @@ std::unique_ptr<Interface> generate_sortledton(bool directed_graph) {
 }
 #endif
 
+#if defined(HAVE_MICROBENCHMARKS)
+std::unique_ptr<Interface> generate_microbenchmarks(bool directed_graph) {
+  auto& config = configuration();
+  string library_name = config.get_library_name();
+  return unique_ptr<Interface>{ new MicroBenchmarksDriver(directed_graph,  library_name) };
+}
+#endif
+
 vector<ImplementationManifest> implementations() {
     vector<ImplementationManifest> result;
 
@@ -314,7 +326,15 @@ vector<ImplementationManifest> implementations() {
 #endif
 
 #if defined(HAVE_SORTLEDTON)
-    result.emplace_back("sortledton", "Sortledton", &generate_sortledton);
+//    result.emplace_back("sortledton", "Sortledton", &generate_sortledton);
+// v2: 11.07.2021 Bugfixex for size and version drawing.
+    result.emplace_back("sortledton.1", "Sortledton", &generate_sortledton);
+#endif
+
+#if defined(HAVE_MICROBENCHMARKS)
+  //    result.emplace_back("sortledton", "Sortledton", &generate_sortledton);
+// v2: 11.07.2021 Bugfixex for size and version drawing.
+    result.emplace_back("sorted_vector_al", "Sorted Vector adjacency lists", &generate_microbenchmarks);
 #endif
     return result;
 }
@@ -358,6 +378,10 @@ void Interface::updates_stop() { }
 
 bool Interface::can_be_validated() const {
     return true;
+}
+
+bool Interface::has_weights() const {
+  return true;
 }
 
 /*****************************************************************************

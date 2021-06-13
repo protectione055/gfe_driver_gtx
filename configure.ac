@@ -607,6 +607,53 @@ fi
 
 
 #############################################################################
+# Support for the Microbenchmarks
+# Usage:
+# --with-microbenchmarks=/path/to/microbenchmarks/build
+#
+
+AC_ARG_WITH([microbenchmarks], [AS_HELP_STRING([--with-microbenchmarksn@<:@=ARG@:>@], [
+    Enable the support to Microbenchmarks. The argument needs to be the path where the library has been built.
+])], [])
+
+if ( test x"${with_microbenchmarks}" != x"" && test x"${with_microbenchmarks}" != "no" ); then
+    if( test x"${with_microbenchmarks}" == x"yes" ); then
+        AC_MSG_ERROR(["the full path to the Microbenchmarks build needs to be specified, e.g. --with-microbenchmarks=/path/to/microbenchmarks/build"]);
+    fi
+
+    MY_INTEL_TBB()
+
+    path_microbenchmarks=$(realpath "${with_microbenchmarks}")
+    path_microbenchmarks_library="${path_microbenchmarks}/libadjacency_lists_microexperiments.a"
+    AC_CHECK_FILE([${path_microbenchmarks_library}], [  ],  [ AC_MSG_ERROR([file not found: ${path_microbenchmarks_library}]) ])
+
+    path_microbenchmarks_makefile="${path_microbenchmarks}/Makefile"
+    AC_CHECK_FILE([${path_microbenchmarks_makefile}], [  ],  [ AC_MSG_ERROR(["file not found: ${path_microbenchmarks_makefile}"]) ])
+
+    path_microbenchmarks_includedir=$(realpath "${path_microbenchmarks}/../")
+    AC_MSG_NOTICE([microbenchmarks include path: ${path_microbenchmarks_includedir}])
+
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_microbenchmarks_includedir} -I${path_microbenchmarks}/include"])
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_microbenchmarks_includedir}/indices -I${path_microbenchmarks_includedir}/adjacency_lists"])
+    # TODO clean up include structure in microbenchmarks
+    AS_VAR_SET([LIBS], ["-L${path_microbenchmarks} -ladjacency_lists_microexperiments ${LIBS}"])
+
+    # Try to compile a program with microbenchmarks
+    AC_LINK_IFELSE([
+        AC_LANG_PROGRAM([[
+            @%:@include <factory.h>
+        ]], [[
+            microbenchmarks::generate_data_structure("sorted_vector");
+        ]])
+    ], [], [
+        AC_MSG_FAILURE([unable to compile and link an executable with Microbenchmarks])
+    ])
+
+    AC_MSG_NOTICE([microbenchmarks support enabled])
+    AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_MICROBENCHMARKS"])
+fi
+
+#############################################################################
 # Remove extra blanks from our variables
 EXTRA_CPPFLAGS=$(echo ${EXTRA_CPPFLAGS} | xargs)
 CPPFLAGS=$(echo ${CPPFLAGS} | xargs);

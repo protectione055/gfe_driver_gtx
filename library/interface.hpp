@@ -150,6 +150,8 @@ public:
      * Check whether we are allowed to validate the updates performed
      */
     virtual bool can_be_validated() const;
+
+    virtual bool has_weights() const;
 };
 
 /**
