@@ -101,7 +101,6 @@ namespace gfe::library {
      * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)
      */
     bool MicroBenchmarksDriver::add_vertex(uint64_t vertex_id) {
-      scoped_lock<mutex> l {vertex_add_mutex};
       vertex_mapping::accessor a;
       if (!external_2_internal.insert(a, vertex_id)) {
         return false;
