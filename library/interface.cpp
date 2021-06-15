@@ -334,8 +334,10 @@ vector<ImplementationManifest> implementations() {
 #if defined(HAVE_MICROBENCHMARKS)
   //    result.emplace_back("sortledton", "Sortledton", &generate_sortledton);
 // v2: 11.07.2021 Bugfixex for size and version drawing.
+    result.emplace_back("vector_al", "Vector adjacency lists", &generate_microbenchmarks);
     result.emplace_back("sorted_vector_al", "Sorted Vector adjacency lists", &generate_microbenchmarks);
     result.emplace_back("robin_hood_sorted_vector_al", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
+    result.emplace_back("tree_sorted_vector_al", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
 #endif
     return result;
 }
