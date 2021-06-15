@@ -233,7 +233,9 @@ std::unique_ptr<Interface> generate_sortledton(bool directed_graph) {
 std::unique_ptr<Interface> generate_microbenchmarks(bool directed_graph) {
   auto& config = configuration();
   string library_name = config.get_library_name();
-  return unique_ptr<Interface>{ new MicroBenchmarksDriver(directed_graph,  library_name) };
+  string version_delimiter = ".";
+  string library_name_without_version = library_name.substr(0, library_name.find(version_delimiter));
+  return unique_ptr<Interface>{ new MicroBenchmarksDriver(directed_graph,  library_name_without_version) };
 }
 #endif
 
@@ -332,14 +334,20 @@ vector<ImplementationManifest> implementations() {
 #endif
 
 #if defined(HAVE_MICROBENCHMARKS)
-  //    result.emplace_back("sortledton", "Sortledton", &generate_sortledton);
-// v2: 11.07.2021 Bugfixex for size and version drawing.
-    result.emplace_back("vector_al", "Vector adjacency lists", &generate_microbenchmarks);
-    result.emplace_back("sorted_vector_al", "Sorted Vector adjacency lists", &generate_microbenchmarks);
-    result.emplace_back("robin_hood_sorted_vector_al", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
-    result.emplace_back("tree_sorted_vector_al", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
-    result.emplace_back("robin_hood_al", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
-    result.emplace_back("edgeiter_sorted_vector_al", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+//    result.emplace_back("vector_al", "Vector adjacency lists", &generate_microbenchmarks);
+//    result.emplace_back("sorted_vector_al", "Sorted Vector adjacency lists", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_sorted_vector_al", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
+//    result.emplace_back("tree_sorted_vector_al", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_al", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
+//    result.emplace_back("edgeiter_sorted_vector_al", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+
+    // Bugfix 14.06.2021 library is now linked against OpenMP and runs algorithms in paralell
+    result.emplace_back("vector_al.1", "Vector adjacency lists", &generate_microbenchmarks);
+    result.emplace_back("sorted_vector_al.1", "Sorted Vector adjacency lists", &generate_microbenchmarks);
+    result.emplace_back("robin_hood_sorted_vector_al.1", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
+    result.emplace_back("tree_sorted_vector_al.1", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
+    result.emplace_back("robin_hood_al.1", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
+    result.emplace_back("edgeiter_sorted_vector_al.1", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
 #endif
     return result;
 }
