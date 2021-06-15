@@ -277,7 +277,7 @@ namespace gfe::library {
     }
 
     bool MicroBenchmarksDriver::has_weights() const {
-      return true;
+      return ds->has_weights();
     }
 
 }
