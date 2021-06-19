@@ -5,7 +5,6 @@
 #include "microbenchmarks_driver.hpp"
 
 #include <gapbs.h>
-
 #include <factory.h>
 
 namespace gfe::library {
@@ -101,15 +100,11 @@ namespace gfe::library {
      * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)
      */
     bool MicroBenchmarksDriver::add_vertex(uint64_t vertex_id) {
+      scoped_lock<mutex> l(vertex_add_mutex);
       vertex_mapping::accessor a;
-      if (!external_2_internal.insert(a, vertex_id)) {
+      if (!external_2_internal.insert(a, vertex_id)) { // This does not seem to block until a is released. It seems to continue with the information that another thread is !currently! inserting this key.
         return false;
       } else {
-//        if (registered_vertices.find(vertex_id) != registered_vertices.end()) {
-//          cout << "Trying to register " << vertex_id << "twice" << endl;
-//        } else {
-//          registered_vertices.insert(vertex_id);
-//        }
         auto internal_id = next_vertex_id.fetch_add(1);
         if (ds->insert_vertex(internal_id)) {
           a->second = internal_id;
@@ -207,7 +202,23 @@ namespace gfe::library {
       a.release();
 
       auto distances = Gapbs::bfs(*ds, internal_source);
-      auto external_ids = translate<uint>(distances);
+
+      size_t N = distances.size();
+      vector <pair<vertex_id_t, uint>> external_ids(N);
+
+      #pragma omp parallel for
+      for (uint v = 0; v < N; v++) {
+        if (ds->has_vertex(v)) {
+          if (distances[v] < 0) {
+            external_ids[v] = make_pair(internal_2_external[v], numeric_limits<uint>::max());
+          } else {
+            external_ids[v] = make_pair(internal_2_external[v], distances[v]);
+          }
+
+        } else {
+          external_ids[v] = make_pair(v, numeric_limits<uint>::max());
+        }
+      }
 
       if (dump2file != nullptr) {
         save_bfs(external_ids, dump2file);
@@ -242,13 +253,7 @@ namespace gfe::library {
     }
 
     void MicroBenchmarksDriver::lcc(const char *dump2file) {
-      vector<double> lcc_values;
-      if (ds->is_sorted()) {
-        lcc_values = Gapbs::lcc_merge_sort(*ds);
-      } else {
-        lcc_values = Gapbs::lcc_unsorted(*ds);
-      }
-
+      vector<double> lcc_values = Gapbs::lcc(*ds);
       auto external_ids = translate<double>(lcc_values);
       if (dump2file != nullptr) {
         save_result<double>(external_ids, dump2file);
