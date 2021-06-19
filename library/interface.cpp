@@ -341,13 +341,23 @@ vector<ImplementationManifest> implementations() {
 //    result.emplace_back("robin_hood_al", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
 //    result.emplace_back("edgeiter_sorted_vector_al", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
 
-    // Bugfix 14.06.2021 library is now linked against OpenMP and runs algorithms in paralell
-    result.emplace_back("vector_al.1", "Vector adjacency lists", &generate_microbenchmarks);
-    result.emplace_back("sorted_vector_al.1", "Sorted Vector adjacency lists", &generate_microbenchmarks);
-    result.emplace_back("robin_hood_sorted_vector_al.1", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
-    result.emplace_back("tree_sorted_vector_al.1", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
-    result.emplace_back("robin_hood_al.1", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
-    result.emplace_back("edgeiter_sorted_vector_al.1", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+    // Bugfix 14.06.2021 library is now linked against OpenMP and runs algorithms in paralell, also adds a robin hood based adjacency list
+//    result.emplace_back("vector_al.1", "Vector adjacency lists", &generate_microbenchmarks);
+//    result.emplace_back("sorted_vector_al.1", "Sorted Vector adjacency lists", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_sorted_vector_al.1", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
+//    result.emplace_back("tree_sorted_vector_al.1", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_al.1", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
+//    result.emplace_back("edgeiter_sorted_vector_al.1", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+
+    // Bugfix 16.06.2021 vertices addtions are now serialized due to issues with TBB concurent_hash_set semantics.
+    // Changes to shared locks to speed up LCC.
+    // Also, adds a special LCC method for hash sets.
+    result.emplace_back("vector_al.2", "Vector adjacency lists", &generate_microbenchmarks);
+    result.emplace_back("sorted_vector_al.2", "Sorted Vector adjacency lists", &generate_microbenchmarks);
+    result.emplace_back("robin_hood_sorted_vector_al.2", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
+    result.emplace_back("tree_sorted_vector_al.2", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
+    result.emplace_back("robin_hood_al.2", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
+    result.emplace_back("edgeiter_sorted_vector_al.2", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
 #endif
     return result;
 }
