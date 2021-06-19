@@ -254,6 +254,9 @@ vector<ImplementationManifest> implementations() {
     result.emplace_back("csr3-numa", "CSR baseline, allocate the internal arrays using all NUMA nodes", &generate_csr_numa);
     result.emplace_back("csr3-lcc-numa", "CSR baseline, allocate the internal arrays using all NUMA nodes, sort-merge impl for the LCC kernel", &generate_csr_lcc_numa);
 
+    // Temporary, we run csr3-lcc on a single NUMA node to pin down if NUMA effects are resposible for SortedVectorAL being faster some times
+    result.emplace_back("single-numa-node-csr3-lcc", "CSR baseline, sort-merge impl for the LCC kernel", &generate_csr_lcc);
+
     // v2 25/06/2020: Updates, implicitly create a vertex referred in a new edge upon first reference with the method add_edge_v2
     // v3 14/04/2021: Fix the predicate in the TimeoutService
     result.emplace_back("dummy_v3", "Dummy implementation of the interface, all operations are nop", &generate_dummy);
@@ -358,6 +361,8 @@ vector<ImplementationManifest> implementations() {
     result.emplace_back("tree_sorted_vector_al.2", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
     result.emplace_back("robin_hood_al.2", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
     result.emplace_back("edgeiter_sorted_vector_al.2", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+
+    result.emplace_back("single-numa-node-sorted-vector_al.2", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
 #endif
     return result;
 }
