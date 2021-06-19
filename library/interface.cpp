@@ -355,14 +355,28 @@ vector<ImplementationManifest> implementations() {
     // Bugfix 16.06.2021 vertices addtions are now serialized due to issues with TBB concurent_hash_set semantics.
     // Changes to shared locks to speed up LCC.
     // Also, adds a special LCC method for hash sets.
-    result.emplace_back("vector_al.2", "Vector adjacency lists", &generate_microbenchmarks);
-    result.emplace_back("sorted_vector_al.2", "Sorted Vector adjacency lists", &generate_microbenchmarks);
-    result.emplace_back("robin_hood_sorted_vector_al.2", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
-    result.emplace_back("tree_sorted_vector_al.2", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
-    result.emplace_back("robin_hood_al.2", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
-    result.emplace_back("edgeiter_sorted_vector_al.2", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+//    result.emplace_back("vector_al.2", "Vector adjacency lists", &generate_microbenchmarks);
+//    result.emplace_back("sorted_vector_al.2", "Sorted Vector adjacency lists", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_sorted_vector_al.2", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
+//    result.emplace_back("tree_sorted_vector_al.2", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_al.2", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
+//    result.emplace_back("edgeiter_sorted_vector_al.2", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+//
+//    result.emplace_back("single-numa-node-sorted-vector_al.2", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
 
-    result.emplace_back("single-numa-node-sorted-vector_al.2", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+    // Performance and bufixes 19.06.2021
+    // Changes:
+    //   * Use of blocked iterator for SSSP
+    //   * Removes unnecessary translation and edge counting from the BFS
+    //   * Removes locks from sequential tree and hash set index when running analytics
+    result.emplace_back("vector_al.3", "Vector adjacency lists", &generate_microbenchmarks);
+    result.emplace_back("sorted_vector_al.3", "Sorted Vector adjacency lists", &generate_microbenchmarks);
+    result.emplace_back("robin_hood_sorted_vector_al.3", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
+    result.emplace_back("tree_sorted_vector_al.3", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
+    result.emplace_back("robin_hood_al.3", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
+    result.emplace_back("edgeiter_sorted_vector_al.3", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+
+    result.emplace_back("single-numa-node-sorted-vector_al.3", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
 #endif
     return result;
 }
