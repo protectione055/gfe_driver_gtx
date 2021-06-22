@@ -375,7 +375,10 @@ vector<ImplementationManifest> implementations() {
     result.emplace_back("tree_sorted_vector_al.3", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
     result.emplace_back("robin_hood_al.3", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
     result.emplace_back("edgeiter_sorted_vector_al.3", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
-    result.emplace_back("mb-csr.3", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
+
+    // CSR is now implemented lock free and with a smaller index entry.
+//    result.emplace_back("mb-csr.3", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
+    result.emplace_back("mb-csr.4", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
 
     result.emplace_back("single-numa-node-sorted-vector_al.3", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
 #endif
