@@ -369,18 +369,31 @@ vector<ImplementationManifest> implementations() {
     //   * Use of blocked iterator for SSSP
     //   * Removes unnecessary translation and edge counting from the BFS
     //   * Removes locks from sequential tree and hash set index when running analytics
-    result.emplace_back("vector_al.3", "Vector adjacency lists", &generate_microbenchmarks);
-    result.emplace_back("sorted_vector_al.3", "Sorted Vector adjacency lists", &generate_microbenchmarks);
-    result.emplace_back("robin_hood_sorted_vector_al.3", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
-    result.emplace_back("tree_sorted_vector_al.3", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
-    result.emplace_back("robin_hood_al.3", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
-    result.emplace_back("edgeiter_sorted_vector_al.3", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+//    result.emplace_back("vector_al.3", "Vector adjacency lists", &generate_microbenchmarks);
+//    result.emplace_back("sorted_vector_al.3", "Sorted Vector adjacency lists", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_sorted_vector_al.3", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
+//    result.emplace_back("tree_sorted_vector_al.3", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_al.3", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
+//    result.emplace_back("edgeiter_sorted_vector_al.3", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+ //   result.emplace_back("mb-csr.3", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
 
-    // CSR is now implemented lock free and with a smaller index entry.
-//    result.emplace_back("mb-csr.3", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
+//      result.emplace_back("single-numa-node-sorted-vector_al.4", "Sorted Vector adjacency lists run on a single NUMA node", &generate_microbenchmarks);
+
+    // Performance and bugfixes 22.06.2021
+    // * CSR is now implemented lock free and with a smaller index entry.
+    // * all data structures do not aquire locks while running analytics
+    // * we do not sequentialize vertex inserts anymore
+    // * We use the same LCC implementation as the GFE driver
     result.emplace_back("mb-csr.4", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
+//    result.emplace_back("vector_al.4", "Vector adjacency lists", &generate_microbenchmarks);
+    result.emplace_back("sorted_vector_al.4", "Sorted Vector adjacency lists", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_sorted_vector_al.4", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
+//    result.emplace_back("tree_sorted_vector_al.4", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
+//    result.emplace_back("robin_hood_al.4", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
+//    result.emplace_back("edgeiter_sorted_vector_al.4", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
 
-    result.emplace_back("single-numa-node-sorted-vector_al.3", "Sorted Vector adjacency lists with EdgeIterator instead of BlockedEdgeIterator", &generate_microbenchmarks);
+      result.emplace_back("single-numa-node-sorted-vector_al.4", "Sorted Vector adjacency lists run on a single NUMA node", &generate_microbenchmarks);
+
 #endif
     return result;
 }
