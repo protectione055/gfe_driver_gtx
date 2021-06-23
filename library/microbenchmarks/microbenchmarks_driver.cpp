@@ -6,6 +6,7 @@
 
 #include <gapbs.h>
 #include <factory.h>
+#include <GFEDriverLCC.h>
 
 namespace gfe::library {
     using namespace microbenchmarks;
@@ -100,6 +101,7 @@ namespace gfe::library {
      * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)
      */
     bool MicroBenchmarksDriver::add_vertex(uint64_t vertex_id) {
+      scoped_lock<mutex> l(vertex_add_mutex);
       vertex_mapping::accessor a;
       if (!external_2_internal.insert(a, vertex_id)) { // This does not seem to block until a is released. It seems to continue with the information that another thread is !currently! inserting this key.
         return false;
@@ -252,7 +254,7 @@ namespace gfe::library {
     }
 
     void MicroBenchmarksDriver::lcc(const char *dump2file) {
-      vector<double> lcc_values = Gapbs::lcc(*ds);
+      vector<double> lcc_values = gfeDriverLCC::GFEDriverLCC::lcc(*ds);
       auto external_ids = translate<double>(lcc_values);
       if (dump2file != nullptr) {
         save_result<double>(external_ids, dump2file);
