@@ -384,9 +384,9 @@ vector<ImplementationManifest> implementations() {
     // * all data structures do not aquire locks while running analytics
     // * we do not sequentialize vertex inserts anymore
     // * We use the same LCC implementation as the GFE driver
-    result.emplace_back("mb-csr.4", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
+    result.emplace_back("mb-csr.5", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
 //    result.emplace_back("vector_al.4", "Vector adjacency lists", &generate_microbenchmarks);
-    result.emplace_back("sorted_vector_al.4", "Sorted Vector adjacency lists", &generate_microbenchmarks);
+    result.emplace_back("sorted_vector_al.5", "Sorted Vector adjacency lists", &generate_microbenchmarks);
 //    result.emplace_back("robin_hood_sorted_vector_al.4", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
 //    result.emplace_back("tree_sorted_vector_al.4", "Sorted Vector adjacency lists with std::ordered_map index", &generate_microbenchmarks);
 //    result.emplace_back("robin_hood_al.4", "Adjacency set based on a flat robin hood hash set.", &generate_microbenchmarks);
