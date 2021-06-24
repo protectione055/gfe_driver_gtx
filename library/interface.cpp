@@ -394,6 +394,9 @@ vector<ImplementationManifest> implementations() {
 
       result.emplace_back("single-numa-node-sorted-vector_al.4", "Sorted Vector adjacency lists run on a single NUMA node", &generate_microbenchmarks);
 
+      // Test this is the same as mb-csr.6 but with WCC implemented and compiled as part of the GFE driver.
+//      result.emplace_back("mb-csr.7", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
+
 #endif
     return result;
 }
