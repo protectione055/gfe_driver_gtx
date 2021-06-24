@@ -260,6 +260,27 @@ namespace gfe::library {
       handle.close();
     }
 
+    static vector<pair<uint64_t, uint>> translate_bfs(SnapshotTransaction& tx, pvector<int64_t>& values) {
+      auto N = values.size();
+
+      vector<pair<vertex_id_t , uint>> logical_result(N);
+
+#pragma omp parallel for
+      for (uint v = 0; v <  N; v++) {
+        if (tx.has_vertex_p(v)) {
+          if (values[v] >= 0) {
+            logical_result[v] = make_pair(tx.logical_id(v), values[v]);
+          } else {
+            logical_result[v] = make_pair(tx.logical_id(v), numeric_limits<uint>::max());
+          }
+        } else {
+          logical_result[v] = make_pair(v, numeric_limits<uint>::max());
+        }
+      }
+      return logical_result;
+    }
+
+
     void SortledtonDriver::bfs(uint64_t source_vertex_id, const char *dump2file) {
       tm.register_thread(0);
       run_gc();
@@ -271,9 +292,8 @@ namespace gfe::library {
       auto distances = GAPBSAlgorithms::bfs(tx, physical_src, false);
 
       cout << "BFS took " << t << endl;
-      auto external_ids = translate<uint>(tx, distances);
+      auto external_ids = translate_bfs(tx, distances);
       cout << "Translation took " << t << endl;
-      cout << "Size " << external_ids.size() << endl;
       tm.transactionCompleted(tx);
 
       if (dump2file != nullptr) {
