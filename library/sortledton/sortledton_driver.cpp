@@ -25,6 +25,7 @@
 #include "experiments/CDLP.h"
 #include "experiments/LCC.h"
 #include "experiments/GAPBSAlgorithms.h"
+#include "versioning/VersionedBlockedEdgeIterator.h"
 
 using namespace gapbs;
 using namespace common;
@@ -34,7 +35,9 @@ namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
 
 namespace gfe::library {
 
-    SortledtonDriver::SortledtonDriver(bool is_graph_directed, size_t properties_size, int block_size) : tm(1), m_is_directed(is_graph_directed) {
+    SortledtonDriver::SortledtonDriver(bool is_graph_directed, size_t properties_size, int block_size) : tm(1),
+                                                                                                         m_is_directed(
+                                                                                                                 is_graph_directed) {
       if (is_graph_directed == true) {
         throw std::invalid_argument("Only undirected graphs are currently supported by the front-end");
       }
@@ -83,7 +86,8 @@ namespace gfe::library {
  */
     bool SortledtonDriver::has_vertex(uint64_t vertex_id) const {
       SortledtonDriver *non_const_this = const_cast<SortledtonDriver *>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, false);  // TODO weights currently not supported
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds,
+                                                                         false);  // TODO weights currently not supported
       auto has_vertex = tx.has_vertex(vertex_id);
       non_const_this->tm.transactionCompleted(tx);
       return has_vertex;
@@ -94,9 +98,10 @@ namespace gfe::library {
  */
     double SortledtonDriver::get_weight(uint64_t source, uint64_t destination) const {
       SortledtonDriver *non_const_this = const_cast<SortledtonDriver *>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, false);  // TODO weights currently not supported
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds,
+                                                                         false);  // TODO weights currently not supported
       weight_t w;
-      auto has_edge = tx.get_weight({static_cast<dst_t>(source), static_cast<dst_t>(destination)}, (char*) &w);
+      auto has_edge = tx.get_weight({static_cast<dst_t>(source), static_cast<dst_t>(destination)}, (char *) &w);
       non_const_this->tm.transactionCompleted(tx);
       return has_edge ? w : nan("");
     }
@@ -149,7 +154,7 @@ namespace gfe::library {
       assert(!m_is_directed);
       edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
 
-      thread_local optional<SnapshotTransaction> tx_o = nullopt;
+      thread_local optional <SnapshotTransaction> tx_o = nullopt;
       if (tx_o.has_value()) {
         tm.getSnapshotTransaction(ds, true, *tx_o);
       } else {
@@ -168,8 +173,8 @@ namespace gfe::library {
       // test
       bool inserted = true;
       try {
-        tx.insert_edge(internal_edge, (char*) &e.m_weight, sizeof(e.m_weight));
-        tx.insert_edge({internal_edge.dst, internal_edge.src}, (char*) &e.m_weight, sizeof(e.m_weight));
+        tx.insert_edge(internal_edge, (char *) &e.m_weight, sizeof(e.m_weight));
+        tx.insert_edge({internal_edge.dst, internal_edge.src}, (char *) &e.m_weight, sizeof(e.m_weight));
         inserted &= tx.execute();
       } catch (exception &e) {
         inserted = false;
@@ -181,7 +186,7 @@ namespace gfe::library {
     bool SortledtonDriver::add_edge_v2(gfe::graph::WeightedEdge e) {
       assert(!m_is_directed);
 
-      thread_local optional<SnapshotTransaction> tx_o = nullopt;
+      thread_local optional <SnapshotTransaction> tx_o = nullopt;
       if (tx_o.has_value()) {
         tm.getSnapshotTransaction(ds, true, *tx_o);
       } else {
@@ -196,8 +201,8 @@ namespace gfe::library {
       tx.insert_vertex(internal_edge.src);
       tx.insert_vertex(internal_edge.dst);
 
-      tx.insert_edge({internal_edge.dst, internal_edge.src}, (char*) &e.m_weight, sizeof(e.m_weight));
-      tx.insert_edge(internal_edge, (char*) &e.m_weight, sizeof(e.m_weight));
+      tx.insert_edge({internal_edge.dst, internal_edge.src}, (char *) &e.m_weight, sizeof(e.m_weight));
+      tx.insert_edge(internal_edge, (char *) &e.m_weight, sizeof(e.m_weight));
 
       bool inserted = true;
       inserted &= tx.execute();
@@ -209,7 +214,7 @@ namespace gfe::library {
     bool SortledtonDriver::remove_edge(gfe::graph::Edge e) {
       assert(!m_is_directed);
 
-      thread_local optional<SnapshotTransaction> tx_o = nullopt;
+      thread_local optional <SnapshotTransaction> tx_o = nullopt;
       if (tx_o.has_value()) {
         tm.getSnapshotTransaction(ds, true, *tx_o);
       } else {
@@ -226,20 +231,20 @@ namespace gfe::library {
       removed &= tx.execute();
 
       tm.transactionCompleted(tx);
-      return removed;
-      ;
+      return removed;;
     }
 
     void SortledtonDriver::run_gc() {
       if (!gced) {
-        Timer t; t.start();
+        Timer t;
+        t.start();
         ds->gc_all();
         gced = true;
         cout << "Running GC took: " << t;
       }
     }
 
-    static void save_bfs(vector<pair<uint64_t, uint>>& result, const char *dump2file) {
+    static void save_bfs(vector <pair<uint64_t, uint>> &result, const char *dump2file) {
       assert(dump2file != nullptr);
       COUT_DEBUG("save the results to: " << dump2file)
 
@@ -260,13 +265,13 @@ namespace gfe::library {
       handle.close();
     }
 
-    static vector<pair<uint64_t, uint>> translate_bfs(SnapshotTransaction& tx, pvector<int64_t>& values) {
+    static vector <pair<uint64_t, uint>> translate_bfs(SnapshotTransaction &tx, pvector <int64_t> &values) {
       auto N = values.size();
 
-      vector<pair<vertex_id_t , uint>> logical_result(N);
+      vector <pair<vertex_id_t, uint>> logical_result(N);
 
 #pragma omp parallel for
-      for (uint v = 0; v <  N; v++) {
+      for (uint v = 0; v < N; v++) {
         if (tx.has_vertex_p(v)) {
           if (values[v] >= 0) {
             logical_result[v] = make_pair(tx.logical_id(v), values[v]);
@@ -288,7 +293,8 @@ namespace gfe::library {
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
       auto physical_src = tx.physical_id(source_vertex_id);
 
-      Timer t; t.start();
+      Timer t;
+      t.start();
       auto distances = GAPBSAlgorithms::bfs(tx, physical_src, false);
 
       cout << "BFS took " << t << endl;
@@ -301,7 +307,6 @@ namespace gfe::library {
       }
       tm.deregister_thread(0);
     }
-
 
 
     void SortledtonDriver::pagerank(uint64_t num_iterations, double damping_factor, const char *dump2file) {
@@ -355,23 +360,6 @@ namespace gfe::library {
       tm.deregister_thread(0);
     }
 
-    void SortledtonDriver::lcc(const char *dump2file) {
-      tm.register_thread(0);
-      run_gc();
-
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
-
-      auto lcc_values = LCC::lcc_merge_sort(tx);
-      auto external_ids = translate<double>(tx, lcc_values);
-
-      tm.transactionCompleted(tx);
-
-      if (dump2file != nullptr) {
-        save_result<double>(external_ids, dump2file);
-      }
-      tm.deregister_thread(0);
-    }
-
     void SortledtonDriver::sssp(uint64_t source_vertex_id, const char *dump2file) {
       tm.register_thread(0);
       run_gc();
@@ -392,6 +380,247 @@ namespace gfe::library {
     }
 
     bool SortledtonDriver::can_be_validated() const {
-     return true;
+      return true;
     }
+
+
+
+    /*****************************************************************************
+ *                                                                           *
+ *  LCC, sort-merge implementation, taken from Teseo, adapted to Sortledton  *
+ *                                                                           *
+ *****************************************************************************/
+/**
+ * Algorithm parameters
+ */
+    static const uint64_t LCC_NUM_WORKERS = thread::hardware_concurrency(); // number of workers / logical threads to use
+//static const uint64_t LCC_NUM_WORKERS = 1; // number of workers / logical threads to use
+    static constexpr uint64_t LCC_TASK_SIZE = 1ull << 10; // number of vertices processed in each task
+
+    namespace {
+        class Master {
+            SnapshotTransaction &ds; // CSR data structure
+            atomic <uint64_t> *m_num_triangles; // number of triangles counted so far for the given vertex, array of num_vertices
+            std::atomic <uint64_t> m_next; // counter to select the next task among the workers
+
+            // Reserve the space in the hash maps m_score and m_state so that they can be operated concurrently by each thread/worker
+            void initialise();
+
+            // Compute the final scores
+            void compute_scores(vector<double> &scores);
+
+        public:
+            // Constructor
+            Master(SnapshotTransaction &ds);
+
+            // Destructor
+            ~Master();
+
+            // Execute the algorithm
+            vector<double> execute();
+
+            // Select the next window to process, in the form [vertex_start, vertex_end);
+            // Return true if a window/task has been fetched, false if there are no more tasks to process
+            bool next_task(uint64_t *output_vtx_start /* inclusive */, uint64_t *output_vtx_end /* exclusive */);
+
+            // Retrieve the number of triangles associated to the given vertex
+            std::atomic <uint64_t> &num_triangles(uint64_t vertex_id);
+        };
+
+        class Worker {
+            TopologyInterface &ds; // handle to the CSR instance
+            Master *m_master; // handle to the master instance
+            thread m_handle; // underlying thread
+            vector <uint64_t> m_neighbours; // neighbours of the vertex to be processed, internal state
+
+            // Process the given vertex
+            void process_vertex(uint64_t vertex_id);
+
+        public:
+            // Init
+            Worker(TopologyInterface &ds, Master *master);
+
+            // Destructor
+            ~Worker();
+
+            // Main thread
+            void execute();
+
+            // Wait for the worker's thread to terminate
+            void join();
+        };
+
+        class GFELCC {
+        public:
+            static vector<double> execute(SnapshotTransaction &tx);
+        };
+
+        vector<double> GFELCC::execute(SnapshotTransaction &tx) {
+          Master algorithm(tx);
+          return algorithm.execute();
+        }
+
+//        friend class Master;
+//
+//        friend class Worker;
+
+/*****************************************************************************
+ *                                                                           *
+ *  LCC_Master                                                               *
+ *                                                                           *
+ *****************************************************************************/
+        Master::Master(SnapshotTransaction &ds) :
+                ds(ds), m_num_triangles(nullptr), m_next(0) {
+        }
+
+        Master::~Master() {
+          delete[] m_num_triangles;
+          m_num_triangles = nullptr;
+        }
+
+        void Master::initialise() {
+          assert(m_num_triangles == nullptr && "Already initialised");
+          m_num_triangles = new atomic<uint64_t>[ds.vertex_count()](); // init to 0;
+        }
+
+        void Master::compute_scores(vector<double> &scores) {
+          for (uint64_t i = 0, N = ds.max_physical_vertex(); i < N; i++) {
+            if (ds.has_vertex_p(i)) {
+              uint64_t num_triangles = m_num_triangles[i];
+              if (num_triangles > 0) {
+                uint64_t degree = ds.neighbourhood_size_p(i);
+                uint64_t max_num_edges = degree * (degree - 1);
+                double score = static_cast<double>(num_triangles) / max_num_edges;
+                scores[i] = score;
+              } // else m_scores[i] = 0 (default value)
+            }
+          }
+        }
+
+        vector<double> Master::execute() {
+          // init the state and the side information for each vertex
+          initialise();
+
+          // start the workers
+          assert(LCC_NUM_WORKERS >= 1 && "At least one worker should be set");
+          vector < Worker * > workers;
+          workers.reserve(LCC_NUM_WORKERS);
+          for (uint64_t worker_id = 0; worker_id < LCC_NUM_WORKERS; worker_id++) {
+            workers.push_back(new Worker(ds, this));
+          }
+
+          // wait for the workers to terminate ...
+          for (uint64_t worker_id = 0; worker_id < workers.size(); worker_id++) {
+            workers[worker_id]->join();
+            delete workers[worker_id];
+            workers[worker_id] = nullptr;
+          }
+
+          vector<double> scores;
+          scores.resize(ds.vertex_count());
+          compute_scores(scores);
+          return scores;
+        }
+
+        bool Master::next_task(uint64_t *output_vtx_start /* inclusive */,
+                               uint64_t *output_vtx_end /* exclusive */) {
+          uint64_t logical_start = m_next.fetch_add(LCC_TASK_SIZE); /* return the previous value of m_next */
+          uint64_t num_vertices = ds.vertex_count();
+          if (logical_start >= num_vertices) {
+            return false;
+          } else {
+            uint64_t logical_end = std::min(logical_start + LCC_TASK_SIZE, num_vertices);
+
+            *output_vtx_start = logical_start;
+            *output_vtx_end = logical_end;
+
+            return true;
+          }
+        }
+
+        atomic <uint64_t> &Master::num_triangles(uint64_t vertex_id) {
+          return m_num_triangles[vertex_id];
+        }
+
+
+        Worker::Worker(TopologyInterface &ds, Master *master) : ds(ds), m_master(master) {
+          m_handle = thread{&Worker::execute, this};
+        }
+
+        Worker::~Worker() {}
+
+        void Worker::execute() {
+          uint64_t v_start, v_end;
+          while (m_master->next_task(&v_start, &v_end)) {
+            for (uint64_t v = v_start; v < v_end; v++) {
+              process_vertex(v);
+            }
+          }
+        }
+
+        void Worker::join() {
+          m_handle.join();
+        }
+
+        void Worker::process_vertex(uint64_t n1) {
+          uint64_t num_triangles = 0; // current number of triangles found for `n1'
+          m_neighbours.clear();
+
+          SORTLEDTON_ITERATE_NAMED(ds, n1, n2, end_1, {
+                  if (n2 > n1) goto end_1; // we're done with n1
+
+                  m_neighbours.push_back(n2);
+                  uint64_t marker = 0; // current position in the neighbours vector, to merge shared neighbours
+
+                  SORTLEDTON_ITERATE_NAMED(ds, n2, n3, end_2, {
+                    if (n3 > n2) goto end_2; // we're done with n2
+                    assert(n1 > n2 &&
+                           n2 > n3); // we're looking for triangles of the kind c - b - a, with c > b && b > a
+
+                    if (n3 > m_neighbours[marker]) { // merge with m_neighbours
+                      do {
+                        marker++;
+                      } while (marker < m_neighbours.size() && n3 > m_neighbours[marker]);
+                      if (marker >= m_neighbours.size()) break; // there is nothing left to merge
+                    }
+
+                    if (n3 == m_neighbours[marker]) { // match !
+                      num_triangles += 2; // we've discovered both n1 - n2 - n3 and n1 - n3 - n2; with n1 > n2 > n3
+
+                      // increase the contribution for n2
+                      m_master->num_triangles(n2) += 2;
+                      // increase the contribution for n3
+                      m_master->num_triangles(n3) += 2;
+
+                      marker++;
+                      if (marker >= m_neighbours.size()) goto end_2; // there is nothing left to merge
+                    }
+                  });
+          });
+
+          if (num_triangles != 0) {
+            m_master->num_triangles(n1) += num_triangles;
+          }
+        }
+    }
+
+    void SortledtonDriver::lcc(const char *dump2file) {
+      tm.register_thread(0);
+      run_gc();
+
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
+
+      auto lcc_values = GFELCC::execute(tx);
+
+//      auto lcc_values = LCC::lcc_merge_sort(tx);
+      auto external_ids = translate<double>(tx, lcc_values);
+
+      tm.transactionCompleted(tx);
+
+      if (dump2file != nullptr) {
+        save_result<double>(external_ids, dump2file);
+      }
+      tm.deregister_thread(0);
+    }
+
 }
