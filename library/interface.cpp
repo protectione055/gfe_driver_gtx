@@ -333,7 +333,24 @@ vector<ImplementationManifest> implementations() {
 #if defined(HAVE_SORTLEDTON)
 //    result.emplace_back("sortledton", "Sortledton", &generate_sortledton);
 // v2: 11.07.2021 Bugfixex for size and version drawing.
-    result.emplace_back("sortledton.1", "Sortledton", &generate_sortledton);
+//    result.emplace_back("sortledton.1", "Sortledton", &generate_sortledton);
+    /**
+     * v3: 25.07.2021
+     * Carries over optimization applied in the microbenchmarks
+     *   - BFS
+     *     - does not use edge_count anymore but sums up while populating the distance array
+     *     - removes unecessary double translation
+     *   - LCC
+     *     - uses now shared locks
+     *     - uses the GFE driver implementation which is based on pthreads and not OpenMP like mine
+     *   - SSSP
+     *     - now use blocked iterators
+     *   - Size versioning
+     *     - I reuse old version records for neighbourhood size versioning
+     *   - Skiplists
+     *     - uses the correct probability function for deciding the height of new nodes
+     **/
+    result.emplace_back("sortledton.2", "Sortledton", &generate_sortledton);
 #endif
 
 #if defined(HAVE_MICROBENCHMARKS)
