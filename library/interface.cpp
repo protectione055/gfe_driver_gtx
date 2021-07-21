@@ -350,7 +350,30 @@ vector<ImplementationManifest> implementations() {
      *   - Skiplists
      *     - uses the correct probability function for deciding the height of new nodes
      **/
-    result.emplace_back("sortledton.2", "Sortledton", &generate_sortledton);
+//    result.emplace_back("sortledton.2", "Sortledton", &generate_sortledton);
+
+    /**
+     * Temporary version.
+     * - Iterators in Sorltedton do no acquire locks
+     * - BFS is not run as first analytics algorithms. Therefore, GC is not running as the first run.
+     * - PageRank is run first.
+     */
+//    result.emplace_back("sortledton.lock-free-analytics", "Sortledton", &generate_sortledton);
+
+    /**
+     * Temporary version.
+     *  - uses raw memory access for the BFS bottom up step and small sets. No locks acquired.
+     *  - do not use ANY of these results, I ran many experiments with this version.
+     */
+//    result.emplace_back("sortledton.raw-access-bfs", "Sortledton", &generate_sortledton);
+
+    /**
+     * v4: 26.07.2021
+     * - Fixes bug in BFS which slowed down init_distances
+     * - Fixes running debug code in release version
+     * - compiles with O3 -march native and -mtune native
+     **/
+    result.emplace_back("sortledton.3", "Sortledton", &generate_sortledton);
 #endif
 
 #if defined(HAVE_MICROBENCHMARKS)
@@ -401,7 +424,7 @@ vector<ImplementationManifest> implementations() {
     // * all data structures do not aquire locks while running analytics
     // * We use the same LCC implementation as the GFE driver
     // * data structures use a pthread spin lock to keep index elements smaller
-    result.emplace_back("mb-csr.6", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
+//    result.emplace_back("mb-csr.6", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
 //    result.emplace_back("vector_al.4", "Vector adjacency lists", &generate_microbenchmarks);
     result.emplace_back("sorted_vector_al.6", "Sorted Vector adjacency lists", &generate_microbenchmarks);
 //    result.emplace_back("robin_hood_sorted_vector_al.4", "Sorted Vector adjacency lists with robin hood hash set index", &generate_microbenchmarks);
@@ -413,6 +436,7 @@ vector<ImplementationManifest> implementations() {
 
       // Test this is the same as mb-csr.6 but with WCC implemented and compiled as part of the GFE driver.
 //      result.emplace_back("mb-csr.7", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
+      result.emplace_back("mb-csr.8", "CSR data structure of micro benchmarks", &generate_microbenchmarks);
 
 #endif
     return result;
