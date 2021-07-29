@@ -2,34 +2,50 @@
 GFE Driver
 ---
 
-The GFE (Graph Framework Evaluation) Driver is the program used to run the experiments in the paper TBP,  measuring the throughput of updates in libraries supporting structural dynamic graphs and the completion times of the [Graphalytics kernels](https://github.com/ldbc/ldbc_graphalytics). The driver supports the following systems: [Teseo](https://github.com/cwida/teseo), [LLAMA](https://github.com/goatdb/llama), [GraphOne](https://github.com/the-data-lab/GraphOne), [Stinger](http://stingergraph.com/) and [LiveGraph](https://github.com/thu-pacman/LiveGraph-Binary). It can run three kinds experiments: insert all edges in a random permuted order from an input graph, execute the updates specified by a [graphlog file](https://github.com/whatsthecraic/graphlog) and run the kernels of the Graphalytics suite: BFS, PageRank (PR), local triangle counting (LCC), weighted shortest paths (SSSP), weakly connected components (WCC) and community detection through label propagation (CDLP).  
+The GFE (Graph Framework Evaluation) Driver is the program used to run the experiments in "Sortledton: a universal
+graph data structure", measuring the throughput of updates in libraries supporting structural dynamic graphs and the completion times of 
+the [Graphalytics kernels](https://github.com/ldbc/ldbc_graphalytics). 
+The driver supports the following systems: [Sortledton](TODO), [Teseo](https://github.com/cwida/teseo), 
+[LLAMA](https://github.com/goatdb/llama), [GraphOne](https://github.com/the-data-lab/GraphOne), 
+[Stinger](http://stingergraph.com/) and [LiveGraph](https://github.com/thu-pacman/LiveGraph-Binary). 
+Additionally, it supports running the microbenchmarks from the Sortledton paper: [Microbenchmarks](TODO).
+It can run three kinds experiments: insert all edges in a random permuted order from an input graph, 
+execute the updates specified by a [graphlog file](https://github.com/whatsthecraic/graphlog) and run the kernels of
+the Graphalytics suite: BFS, PageRank (PR), local triangle counting (LCC), weighted shortest paths (SSSP), 
+weakly connected components (WCC) and community detection through label propagation (CDLP).  
 
 ### Build 
 
 #### Requisites 
 - O.S. Linux
 - Autotools, [Autoconf 2.69+](https://www.gnu.org/software/autoconf/)
-- A C++17 compliant compiler with support for OpenMP. We tested it on Clang 10 and GCC 10.
+- A C++17 compliant compiler with support for OpenMP. We tested it with GCC 10.
 - libnuma 2.0 +
 - [libpapi 5.5 +](http://icl.utk.edu/papi/)
 - [SQLite 3.27 +](https://sqlite.org)
+- Intel Threading Building Blocks 2 (version 2020.1-2)
 
 #### Configure
 
 Initialise the sources and the configure script by:
 
 ```
-git clone https://github.com/cwida/gfe_driver
+git clone https://github.com/PerFuchs/gfe_driver
 cd gfe_driver
 git submodule update --init
-autoreconf -iv 
+mkdir build && cd build
+autoreconf -iv ..
 ```
 
-The driver needs to be linked with the system to evaluate, which has to be built ahead. We do not recommend linking the driver with multiple systems at once, due to the usage of global variables in some systems and other naming clashes. Instead, it is safer to reconfigure and rebuild the driver each time for a single specific system.
+The driver needs to be linked with the system to evaluate, which has to be built ahead. 
+We do not recommend linking the driver with multiple systems at once, 
+due to the usage of global variables in some systems and other naming clashes. 
+Instead, it is safer to reconfigure and rebuild the driver each time for a single specific system.
 
 
 ##### Stinger
-Use the branch `feature/gfe `, it contains additional patches w.r.t. [upstream](https://github.com/stingergraph/stinger), from https://github.com/whatsthecraic/stinger: 
+Use the branch `feature/gfe `, it contains additional patches w.r.t. 
+[upstream](https://github.com/stingergraph/stinger), from https://github.com/whatsthecraic/stinger: 
 
 ```
 git clone https://github.com/whatsthecraic/stinger -b feature/gfe
@@ -49,7 +65,8 @@ mkdir build && cd build
 
 ##### LLAMA
 
-Use the branch `feature/gfe `, it contains additional patches w.r.t. [upstream](https://github.com/goatdb/llama), from https://github.com/whatsthecraic/llama:  
+Use the branch `feature/gfe `, it contains additional patches w.r.t. 
+[upstream](https://github.com/goatdb/llama), from https://github.com/whatsthecraic/llama:  
 
 ```
 git clone https://github.com/whatsthecraic/llama -b feature/gfe
@@ -67,7 +84,8 @@ mkdir build && cd build
 
 ##### GraphOne
 
-Use the branch `feature/gfe `, it contains additional patches w.r.t. [upstream](https://github.com/the-data-lab/GraphOne), from https://github.com/whatsthecraic/GraphOne:  
+Use the branch `feature/gfe `, it contains additional patches w.r.t.
+[upstream](https://github.com/the-data-lab/GraphOne), from https://github.com/whatsthecraic/GraphOne:  
 
 ```
 git clone https://github.com/whatsthecraic/GraphOne -b feature/gfe
@@ -76,7 +94,8 @@ mkdir build && cd build
 cmake -S ../ -DCMAKE_BUILD_TYPE=Release
 make -j
 ```
-If the build has been successful, it should at least create the executable `graphone64`. Then, configure the driver with:
+If the build has been successful, it should at least create the executable `graphone64`.
+Then, configure the driver with:
 
 ```
 mkdir build && cd build
@@ -85,7 +104,8 @@ mkdir build && cd build
 
 ##### LiveGraph
 
-Download the binary library from the [official repository](https://github.com/thu-pacman/LiveGraph-Binary/releases). In the paper we evaluated version 20200829.
+Download the binary library from the [official repository](https://github.com/thu-pacman/LiveGraph-Binary/releases). 
+In the paper we evaluated version 20200829.
 Then configure the driver by pointing the path to where the library has been downloading:
 
 ```
@@ -95,7 +115,8 @@ mkdir build && cd build
 
 ##### Teseo
 
-Use the branch `master` from https://github.com/cwida/teseo: 
+Use the branch `master` from https://github.com/cwida/teseo.
+In the paper, we evaluated version TODO.
 
 ```
 git clone https://github.com/cwida/teseo
@@ -106,11 +127,26 @@ mkdir build && cd build
 make -j
 ```
 
-If the build has been successful, it should at least create the archive `libteseo.a`. Then configure the driver with:
+If the build has been successful, it should at least create the archive `libteseo.a`.
+Then configure the driver with:
 
 ```
 mkdir build && cd build
 ../configure --enable-optimize --disable-debug --with-teseo=/path/to/teseo/build   
+```
+
+##### Sortledton
+TODO setup sortledton
+
+#### Microbenchmarks
+
+Use the branch `master` from `https://gitlab.db.in.tum.de/per.fuchs/graph-data-structure-microbenchmarks`.
+Follow the instructions in the README of the repository to setup and build the library.
+Then configure the driver with:
+
+```
+mkdir build && cd build
+../configure --enable-optimize --disable-debug --with-microbenchmarks=/path/to/microbenchmark/build   
 ```
 
 #### Compile
@@ -118,18 +154,20 @@ mkdir build && cd build
 Once configured, run `make -j`. There is no `install` target, the final artifact is the executable `gfe_driver`. 
 
 If in the mood of running the testsuite, type `make check -j`.
+TODO test test suite
 
 
 ### Datasets
 
 In our experiments, we used the following input graphs and data sets:
 
-- `dota-league` and `graph500-SF`, with `SF` in {22, 24 26}, were taken from the [official Graphalytics collection](https://www.graphalytics.org/datasets).
+- `dota-league` and `graph500-SF`, with `SF` in {22, 24 26} and `com-friendster`, were taken from the [official Graphalytics collection](https://www.graphalytics.org/datasets).
 - `uniform-SF`, with `SF` in {22, 24, 26} were generated with an [ad-hoc tool](https://github.com/whatsthecraic/uniform_graph_generator). These are synthetic graphs having the same number of vertices and edges of `graph500-SF`, but a uniform node degree distribution.
-- The logs for the experiments with updates, i.e. with both insertions and deletions, were generated with another [ad-hoc tool](https://github.com/whatsthecraic/graphlog). 
+- The logs for the experiments with updates, i.e. with both insertions and deletions,
+  were generated with another [ad-hoc tool](https://github.com/whatsthecraic/graphlog). 
 
-A complete image of all datasets used in the experiments can be downloaded from Zenodo: [input graphs](https://zenodo.org/record/3966439), [graph logs](https://zenodo.org/record/3967002). Note that we ran the experiments on a batch of 15 equal machines. Each machine had a different log for the updates, that is, initialised with a different random seed.  
-
+A complete image of all datasets used in the experiments can be downloaded from Zenodo: [input graphs](https://zenodo.org/record/3966439),
+[graph logs](https://zenodo.org/record/3967002), [dense friendster](https://zenodo.org/record/5146230).
 
 ### Executing the driver
 
@@ -165,6 +203,7 @@ The database `output_results.sqlite3` will contain the final results. Refer to [
 
 ### Repeating the experiments
 
+TODO update experiment run scripts 
 These are the full commands to repeat the experiments in the paper:
 
 ##### Insertions only (Figure 6)
@@ -231,33 +270,4 @@ For the experiment with the memory footprint of Figure 7d, add the arguments: `-
 
 The graphs `graph-dense.properties` are analogous to their corresponding `graph.properties`, but with the vertices relabelled into a dense domain. These graphs are included in the archive loaded in [Zenodo](https://zenodo.org/record/3966439). 
 
-
-##### Sequential and random scans (Figure 9)
-
-```
-make bm
-
-# The tool already assumes the graphs are undirected.
-
-# CSR
-./bm -G /path/to/graph500-24.properties -l csr -t 1,2,4,6,8,12,16,20,40
-./bm -G /path/to/uniform-24.properties -l csr -t 1,2,4,6,8,12,16,20,40
-# Stinger
-./bm -G /path/to/graph500-24.properties -l stinger -t 1,2,4,6,8,12,16,20,40
-./bm -G /path/to/uniform-24.properties -l stinger -t 1,2,4,6,8,12,16,20,40
-# LLAMA
-./bm -G /path/to/graph500-24.properties -l llama -t 1,2,4,6,8,12,16,20,40
-./bm -G /path/to/uniform-24.properties -l llama -t 1,2,4,6,8,12,16,20,40
-# GraphOne
-./bm -G /path/to/graph500-24.properties -l graphone -t 1,2,4,6,8,12,16,20,40
-./bm -G /path/to/uniform-24.properties -l graphone -t 1,2,4,6,8,12,16,20,40
-# LiveGraph
-./bm -G /path/to/graph500-24.properties -l livegraph-ro -t 1,2,4,6,8,12,16,20,40
-./bm -G /path/to/uniform-24.properties -l livegraph-ro -t 1,2,4,6,8,12,16,20,40
-# Teseo
-./bm -G /path/to/graph500-24.properties -l teseo -t 1,2,4,6,8,12,16,20,40
-./bm -G /path/to/uniform-24.properties -l teseo -t 1,2,4,6,8,12,16,20,40
-
-```
-
-At the end of each execution, the tool `bm` stores the results in a json file under /tmp. Check [the notebook bm.nb for Mathematica](https://github.com/whatsthecraic/gfe_notebooks/blob/master/bm.nb) to see an example on how to load and interpret the data.
+TODO how to produce the graphs with gfe_notebooks.
