@@ -98,8 +98,11 @@ namespace gfe::library {
  */
     double SortledtonDriver::get_weight(uint64_t source, uint64_t destination) const {
       SortledtonDriver *non_const_this = const_cast<SortledtonDriver *>(this);
-      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds,
-                                                                         false);  // TODO weights currently not supported
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, false);
+
+      if (!tx.has_vertex(source) || !tx.has_vertex(destination)) {
+        return nan("");
+      }
       weight_t w;
       auto has_edge = tx.get_weight({static_cast<dst_t>(source), static_cast<dst_t>(destination)}, (char *) &w);
       non_const_this->tm.transactionCompleted(tx);
@@ -176,7 +179,9 @@ namespace gfe::library {
         tx.insert_edge(internal_edge, (char *) &e.m_weight, sizeof(e.m_weight));
         tx.insert_edge({internal_edge.dst, internal_edge.src}, (char *) &e.m_weight, sizeof(e.m_weight));
         inserted &= tx.execute();
-      } catch (exception &e) {
+      } catch (VertexDoesNotExistsException &e) {
+        inserted = false;
+      } catch (EdgeExistsException &e) {
         inserted = false;
       }
       tm.transactionCompleted(tx);
@@ -231,7 +236,7 @@ namespace gfe::library {
       removed &= tx.execute();
 
       tm.transactionCompleted(tx);
-      return removed;;
+      return removed;
     }
 
     void SortledtonDriver::run_gc() {
