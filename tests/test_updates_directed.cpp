@@ -258,15 +258,6 @@ TEST(LLAMA, UpdatesDirected){
 }
 #endif
 
-#if defined(HAVE_STINGER)
-TEST(Stinger, UpdatesDirected) {
-    auto stinger = make_shared<Stinger>(/* directed */ true);
-    sequential(stinger);
-    parallel(stinger, 128);
-    parallel(stinger, 1024);
-}
-#endif
-
 #if defined(HAVE_LIVEGRAPH)
 TEST(LiveGraph, UpdatesDirected){
     auto livegraph = make_shared<LiveGraphDriver>(/* directed */ true);

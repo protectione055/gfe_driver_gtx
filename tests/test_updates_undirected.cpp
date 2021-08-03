@@ -329,18 +329,14 @@ TEST(LLAMA, UpdatesUndirected){
 
 #if defined(HAVE_STINGER)
 TEST(Stinger, UpdatesUndirected) {
+    parallel_vertex_deletions = false; // global, enable vertex deletions
 
-  // TODO fails on numvertex count
-//interface->num_vertices()
-//    Which is: 1023 0
-// After vertex deletions
-//    parallel_vertex_deletions = false; // global, enable vertex deletions
-//    parallel_vertex_deletions = false; // global, reset to the default value
-//
-//    auto stinger = make_shared<Stinger>(/* directed */ false);
-//    sequential(stinger, true, false);
-//    parallel(stinger, 128);
-//    parallel(stinger, 1024);
+    auto stinger = make_shared<Stinger>(/* directed */ false);
+    sequential(stinger, true, false);
+    parallel(stinger, 128);
+    parallel(stinger, 1024);
+
+    parallel_vertex_deletions = true; // global, reset to the default value
 }
 #endif
 
