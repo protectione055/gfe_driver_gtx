@@ -46,6 +46,9 @@
 #if defined(HAVE_TESEO)
 #include "library/teseo/teseo_driver.hpp"
 #endif
+#if defined(HAVE_SORTLEDTON)
+#include "library/sortledton/sortledton_driver.hpp"
+#endif
 #include "library/interface.hpp"
 #include "reader/graphalytics_reader.hpp"
 #include "utility/graphalytics_validate.hpp"
@@ -94,22 +97,24 @@ static string temp_file_path(){
     return string(pattern);
 }
 
-static void validate(gfe::library::GraphalyticsInterface* interface, const std::string& path_graphalytics_graph, int algorithms = /* all */ GA_BFS | GA_PAGERANK | GA_WCC | GA_CDLP | GA_LCC | GA_SSSP){
+static void validate(gfe::library::GraphalyticsInterface* interface, const std::string& path_graphalytics_graph, int algorithms = /* all */ GA_BFS | GA_PAGERANK | GA_WCC | GA_CDLP | GA_LCC | GA_SSSP, bool register_thread=true){
     interface->on_main_init(1);
-    interface->on_thread_init(0);
-
-    gfe::reader::GraphalyticsReader reader { path_graphalytics_graph + ".properties" }; // to parse the properties in the file
-
-    if(algorithms & GA_BFS){
-        string path_reference = path_graphalytics_graph + "-BFS";
-        if(!common::filesystem::file_exists(path_reference)) ERROR("The reference output file `" << path_reference << "' does not exist!");
-        string path_result = temp_file_path();
-        LOG("BFS, result: " << path_result << ", reference output: " << path_reference);
-        string str_source_vertex = reader.get_property("bfs.source-vertex");
-        interface->bfs(stoull(str_source_vertex, nullptr, 10), path_result.c_str());
-        GraphalyticsValidate::bfs(path_result, path_reference);
-        LOG("BFS, validation succeeded");
+    if (register_thread) {
+      interface->on_thread_init(0);
     }
+
+  gfe::reader::GraphalyticsReader reader { path_graphalytics_graph + ".properties" }; // to parse the properties in the file
+
+  if(algorithms & GA_BFS){
+    string path_reference = path_graphalytics_graph + "-BFS";
+    if(!common::filesystem::file_exists(path_reference)) ERROR("The reference output file `" << path_reference << "' does not exist!");
+    string path_result = temp_file_path();
+    LOG("BFS, result: " << path_result << ", reference output: " << path_reference);
+    string str_source_vertex = reader.get_property("bfs.source-vertex");
+    interface->bfs(stoull(str_source_vertex, nullptr, 10), path_result.c_str());
+    GraphalyticsValidate::bfs(path_result, path_reference);
+    LOG("BFS, validation succeeded");
+  }
 
     if(algorithms & GA_PAGERANK){
         string path_reference = path_graphalytics_graph + "-PR";
@@ -168,7 +173,9 @@ static void validate(gfe::library::GraphalyticsInterface* interface, const std::
         LOG("SSSP, validation succeeded");
     }
 
-    interface->on_thread_destroy(0);
+    if (register_thread) {
+      interface->on_thread_destroy(0);
+    }
     interface->on_main_destroy();
 }
 
@@ -407,5 +414,13 @@ TEST(TeseoLCC, GraphalyticsUndirected){
     load_graph(graph.get(), path_example_undirected);
     validate(graph.get(), path_example_undirected, GA_LCC);
 }
+#endif
 
+#if defined(HAVE_SORTLEDTON)
+TEST(Sortledton, GraphalyticsUndirected){
+    auto graph = make_unique<SortledtonDriver>(/* directed ? */ false, 8, 512);
+    load_graph(graph.get(), path_example_undirected);
+    cout << "Graph loaded" << endl;
+    validate(graph.get(), path_example_undirected, GA_BFS | GA_PAGERANK | GA_WCC | GA_CDLP | GA_LCC | GA_SSSP, false);
+}
 #endif
