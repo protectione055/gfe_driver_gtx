@@ -12,8 +12,8 @@
 
 #include "library/interface.hpp"
 
-#include "versioning/TransactionManager.h"
-#include "versioning/VersioningBlockedSkipListAdjacencyList.h"
+#include "data-structure/TransactionManager.h"
+#include "data-structure/VersioningBlockedSkipListAdjacencyList.h"
 
 namespace gfe::library {
 

@@ -16,16 +16,15 @@
 
 #include "not_implemented.hpp"
 
-#include "data_types.h"
-#include "versioning/EdgeDoesNotExistsPrecondition.h"
-#include "versioning/VersionedEdgeIterator.h"
-#include "experiments/SSSP.h"
-#include "experiments/PageRank.h"
-#include "experiments/WCC.h"
-#include "experiments/CDLP.h"
-#include "experiments/LCC.h"
-#include "experiments/GAPBSAlgorithms.h"
-#include "versioning/VersionedBlockedEdgeIterator.h"
+#include "data-structure/data_types.h"
+#include "algorithms/SSSP.h"
+#include "algorithms/PageRank.h"
+#include "algorithms/WCC.h"
+#include "algorithms/CDLP.h"
+#include "algorithms/LCC.h"
+#include "algorithms/GAPBSAlgorithms.h"
+#include "data-structure/EdgeDoesNotExistsPrecondition.h"
+#include "data-structure/VersionedBlockedEdgeIterator.h"
 
 using namespace gapbs;
 using namespace common;
