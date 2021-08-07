@@ -323,6 +323,6 @@ With the memory footprint, for LLAMA, it's not necessary to set `--aging_timeout
 
 #### Produce Plots
 
-Download our data from (Zenodo)[https://zenodo.org/record/5155577] or generate the data with scripts mentioned above.
-Then use the (GFE_Notebooks)[git@github.com:PerFuchs/gfe_notebooks.git].
+Download our data from [Zenodo](https://zenodo.org/record/5155577) or generate the data with scripts mentioned above.
+Then use the [GFE_Notebooks](https://github.com/PerFuchs/gfe_notebooks).
 Instructions for use within the other repository.
