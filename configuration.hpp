@@ -92,6 +92,7 @@ class Configuration {
     bool m_validate_inserts = false; // whether to validate the edges inserted
     bool m_validate_output = false; // whether to validate the execution results of the Graphalytics algorithms
     size_t m_block_size = 1024;  // Block size for Sortledton to use
+    bool m_is_mixed_workload = false;
 
     void set_aging_cooloff_seconds(uint64_t value);
     void set_aging_memfp_threshold(uint64_t bytes);
@@ -237,6 +238,8 @@ public:
     void blacklist(gfe::experiment::GraphalyticsAlgorithms& algorithms) const;
 
     size_t block_size();
+
+    bool is_mixed_workload() const;
 };
 
 } // namespace

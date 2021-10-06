@@ -51,7 +51,15 @@ extern mutex _log_mutex [[maybe_unused]];
 
 namespace gfe::experiment {
 
-Aging2Experiment::Aging2Experiment(){ }
+Aging2Experiment::Aging2Experiment() : m_master(nullptr) {
+}
+
+Aging2Experiment::~Aging2Experiment() {
+  if (m_master != nullptr) {
+    delete m_master;
+    m_master = nullptr;
+  }
+}
 
 void Aging2Experiment::set_library(std::shared_ptr<library::UpdateInterface> library) {
     m_library = library;
@@ -125,8 +133,15 @@ Aging2Result Aging2Experiment::execute(){
     if(m_library.get() == nullptr) ERROR("Library not set. Use #set_library to set it.");
     if(m_path_log.empty()) ERROR("Path to the log file not set. Use #set_log to set it.")
 
-    details::Aging2Master master{*this};
-    return master.execute();
+    m_master = new details::Aging2Master(*this);
+    return m_master->execute();
 }
 
+double Aging2Experiment::progress_so_far() {
+  if (m_master == nullptr) {
+    return 0.0;
+  } else {
+    return m_master->progress_so_far();
+  }
+}
 } // namespace

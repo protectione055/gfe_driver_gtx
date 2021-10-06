@@ -126,6 +126,7 @@ void Configuration::initialise(int argc, char* argv[]){
         ("v, validate", "Whether to validate the output results of the Graphalytics algorithms", value<string>()->implicit_value("<path>"))
         ("w, writers", "The number of client threads to use for the write operations", value<int>()->default_value(to_string(num_threads(THREADS_WRITE))))
         ("b, block_size", "The block size for Sortledton to use.", value<int>()->default_value("1024"))
+        ("m, mixed_workload", "If set run updates and analytics concurrently.", value<bool>()->default_value("false"))
     ;
 
     try {
@@ -260,6 +261,10 @@ void Configuration::initialise(int argc, char* argv[]){
 
         if(result.count("aging_memfp") > 0){
             m_aging_memfp = result["aging_memfp"].as<bool>();
+        }
+
+        if(result.count("mixed_workload") > 0){
+          m_is_mixed_workload = result["mixed_workload"].as<bool>();
         }
 
         if( result["aging_memfp_physical"].count() > 0 ){
@@ -448,6 +453,10 @@ bool Configuration::is_load() const {
     return m_load;
 }
 
+bool Configuration::is_mixed_workload() const {
+    return m_is_mixed_workload;
+}
+
 std::unique_ptr<library::Interface> Configuration::generate_graph_library() {
     return m_library_factory(is_graph_directed());
 }
@@ -547,6 +556,7 @@ void Configuration::save_parameters() {
     params.push_back(P{"validate_output", to_string(validate_output())});
     params.push_back(P{"validate_output_graph", get_validation_graph()});
     params.push_back(P{"block_size", to_string(block_size())});
+    params.push_back(P{"is_mixed_workload", to_string(m_is_mixed_workload)});
 
     if(!m_blacklist.empty()){
         stringstream ss;

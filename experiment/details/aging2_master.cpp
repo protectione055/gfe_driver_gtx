@@ -78,10 +78,10 @@ Aging2Master::Aging2Master(const Aging2Experiment& parameters) :
     // 1024 is a hack to avoid issues with small graphs
     m_reported_times = new uint64_t[static_cast<uint64_t>( m_parameters.m_num_reports_per_operations * ::ceil( static_cast<double>(num_operations_total())/num_edges_final_graph()) + 1 )]();
 
-    m_parameters.m_library->on_main_init(m_parameters.m_num_threads + /* this + builder service */ 2);
+    m_parameters.m_library->on_main_init(m_parameters.m_num_threads + /* this + builder service */ 2 + /* plus potentially an analytics runner (mixed epxeriment) */ 1);
 
     init_workers();
-    m_parameters.m_library->on_thread_init(m_parameters.m_num_threads);
+    m_parameters.m_library->on_thread_init(m_parameters.m_num_threads + 1);
 }
 
 Aging2Master::~Aging2Master(){
@@ -100,7 +100,7 @@ void Aging2Master::init_workers() {
     LOG("[Aging2] Initialising " << parameters().m_num_threads << " worker threads ... ");
 
     m_workers.reserve(parameters().m_num_threads);
-    for(uint64_t worker_id = 0; worker_id < parameters().m_num_threads; worker_id++){
+    for(uint64_t worker_id = 1; worker_id < parameters().m_num_threads; worker_id++){
         m_workers.push_back ( new Aging2Worker(*this, worker_id) );
     }
 
@@ -181,12 +181,13 @@ void Aging2Master::do_run_experiment(){
     m_last_time_reported = 0; m_time_start = chrono::steady_clock::now();
 
     // init the build service (the one that creates the new snapshots/deltas)
-    BuildThread build_service { parameters().m_library , static_cast<int>(parameters().m_num_threads) +1, parameters().m_build_frequency };
+    BuildThread build_service { parameters().m_library , static_cast<int>(parameters().m_num_threads) + 2, parameters().m_build_frequency };
 
     auto start_time = chrono::steady_clock::now();
     Timer timer; timer.start();
     m_parameters.m_library->updates_start();
     for(auto w: m_workers) w->execute_updates();
+    m_experiment_running = true;
     wait_and_record();
     build_service.stop();
     m_parameters.m_library->build(); // flush last changes
@@ -411,6 +412,14 @@ uint64_t Aging2Master::memory_footprint() const {
     }
 
     return result;
+}
+
+double Aging2Master::progress_so_far() const {
+  if (m_experiment_running) {
+    return (double) num_operations_sofar() / (double) num_operations_total();
+  } else {
+    return 0.0;
+  }
 }
 
 } // namespace

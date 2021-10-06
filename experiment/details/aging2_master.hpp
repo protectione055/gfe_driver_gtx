@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <vector>
+#include <atomic>
 
 #include "common/static_index.hpp"
 #include "experiment/aging2_result.hpp"
@@ -57,6 +58,8 @@ class Aging2Master {
     StopReason m_stop_reason = StopReason::NOT_SET;
 
     Aging2Result m_results; // final results of the experiment
+
+    std::atomic_bool m_experiment_running = false;
 
     // Initialise the set of workers
     void init_workers();
@@ -114,6 +117,8 @@ public:
 
     // Access the configuration of this experiment
     const Aging2Experiment& parameters() const { return m_parameters; }
+
+    double progress_so_far() const;
 };
 
 }

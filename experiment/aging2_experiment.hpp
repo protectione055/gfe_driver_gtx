@@ -23,6 +23,7 @@
 #include <string>
 
 #include "aging2_result.hpp"
+#include "details/aging2_master.hpp"
 
 // forward declarations
 namespace gfe::graph { class WeightedEdgeStream; }
@@ -60,9 +61,11 @@ class Aging2Experiment {
     std::chrono::seconds m_timeout {0}; // max time to run the simulation (excl. cool-off time)
     std::chrono::seconds m_cooloff {0}; // number of seconds to wait after the experiment terminates, to check the effectiveness of the GC
 
+    details::Aging2Master* m_master;
 public:
     // Instantiate the factory class
     Aging2Experiment();
+    ~Aging2Experiment();
 
     // Set the library to evaluate
     void set_library(std::shared_ptr<gfe::library::UpdateInterface> library);
@@ -122,6 +125,8 @@ public:
     // Execute the experiment with the given configuration
     // @param reset_graph if true, release the contained graph before running the experiment, to save some memory
     Aging2Result execute();
+
+    double progress_so_far();
 };
 
 } // namespace

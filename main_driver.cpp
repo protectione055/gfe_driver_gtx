@@ -21,6 +21,8 @@
 #include "common/system.hpp"
 #include "common/timer.hpp"
 #include "experiment/aging2_experiment.hpp"
+#include "experiment/mixed_workload.hpp"
+#include "experiment/mixed_workload_result.hpp"
 #include "experiment/insert_only.hpp"
 #include "experiment/graphalytics.hpp"
 #include "experiment/validate.hpp"
@@ -123,33 +125,72 @@ static void run_standalone(int argc, char* argv[]){
           }
 
         } else {
-            LOG("[driver] Number of concurrent threads: " << configuration().num_threads(THREADS_WRITE) );
-            LOG("[driver] Aging2, path to the log of updates: " << configuration().get_update_log());
-            Aging2Experiment experiment;
-            experiment.set_library(impl_upd);
-            experiment.set_log(configuration().get_update_log());
-            experiment.set_parallelism_degree(configuration().num_threads(THREADS_WRITE));
-            experiment.set_release_memory(configuration().get_aging_release_memory());
-            experiment.set_report_progress(true);
-            experiment.set_report_memory_footprint(configuration().get_aging_memfp_report());
-            experiment.set_build_frequency(chrono::milliseconds{ configuration().get_build_frequency() });
-            experiment.set_max_weight(configuration().max_weight());
-            experiment.set_measure_latency(configuration().measure_latency());
-            experiment.set_num_reports_per_ops(configuration().get_num_recordings_per_ops());
-            experiment.set_timeout(chrono::seconds { configuration().get_timeout_aging2() });
-            experiment.set_measure_memfp( configuration().measure_memfp() );
-            experiment.set_memfp_physical( configuration().get_aging_memfp_physical() );
-            experiment.set_memfp_threshold(configuration().get_aging_memfp_threshold());
-            experiment.set_cooloff(chrono::seconds { configuration().get_aging_cooloff_seconds() });
+            if (configuration().is_mixed_workload()) {
+              LOG("[driver] Number of write threads: " << configuration().num_threads(THREADS_WRITE));
+              LOG("[driver] Number of read threads: " << configuration().num_threads(THREADS_READ));
+              LOG("[driver] Aging2, path to the log of updates: " << configuration().get_update_log());
 
-            auto result = experiment.execute();
-            if(configuration().has_database()) result.save(configuration().db());
-            random_vertex = result.get_random_vertex_id();
+              // Configure aging experiment
+              Aging2Experiment agingExperiment;
+              agingExperiment.set_library(impl_upd);
+              agingExperiment.set_log(configuration().get_update_log());
+              agingExperiment.set_parallelism_degree(configuration().num_threads(THREADS_WRITE));
+              agingExperiment.set_release_memory(configuration().get_aging_release_memory());
+              agingExperiment.set_report_progress(true);
+              agingExperiment.set_report_memory_footprint(configuration().get_aging_memfp_report());
+              agingExperiment.set_build_frequency(chrono::milliseconds{configuration().get_build_frequency()});
+              agingExperiment.set_max_weight(configuration().max_weight());
+              agingExperiment.set_measure_latency(configuration().measure_latency());
+              agingExperiment.set_num_reports_per_ops(configuration().get_num_recordings_per_ops());
+              agingExperiment.set_timeout(chrono::seconds{configuration().get_timeout_aging2()});
+              agingExperiment.set_measure_memfp(configuration().measure_memfp());
+              agingExperiment.set_memfp_physical(configuration().get_aging_memfp_physical());
+              agingExperiment.set_memfp_threshold(configuration().get_aging_memfp_threshold());
+              agingExperiment.set_cooloff(chrono::seconds{configuration().get_aging_cooloff_seconds()});
+              
+              // Configure analytics experiment
+              GraphalyticsAlgorithms properties { path_graph };
+              if(properties.bfs.m_enabled == true && properties.sssp.m_enabled == false){
+                LOG("[driver] Enabling SSSP with random weights, source vertex: " << random_vertex);
+                properties.sssp.m_enabled = true;
+                properties.sssp.m_source_vertex = random_vertex;
+              }
 
-            if(configuration().validate_inserts() && impl_upd->can_be_validated()){
+              configuration().blacklist(properties);
+              GraphalyticsSequential exp_seq { impl_ga, configuration().num_repetitions(), properties };
+
+              MixedWorkload experiment(agingExperiment, exp_seq);
+              auto result = experiment.execute();
+              if (configuration().has_database()) result.save(configuration().db());
+            } else {
+              LOG("[driver] Number of concurrent threads: " << configuration().num_threads(THREADS_WRITE));
+              LOG("[driver] Aging2, path to the log of updates: " << configuration().get_update_log());
+              Aging2Experiment experiment;
+              experiment.set_library(impl_upd);
+              experiment.set_log(configuration().get_update_log());
+              experiment.set_parallelism_degree(configuration().num_threads(THREADS_WRITE));
+              experiment.set_release_memory(configuration().get_aging_release_memory());
+              experiment.set_report_progress(true);
+              experiment.set_report_memory_footprint(configuration().get_aging_memfp_report());
+              experiment.set_build_frequency(chrono::milliseconds{configuration().get_build_frequency()});
+              experiment.set_max_weight(configuration().max_weight());
+              experiment.set_measure_latency(configuration().measure_latency());
+              experiment.set_num_reports_per_ops(configuration().get_num_recordings_per_ops());
+              experiment.set_timeout(chrono::seconds{configuration().get_timeout_aging2()});
+              experiment.set_measure_memfp(configuration().measure_memfp());
+              experiment.set_memfp_physical(configuration().get_aging_memfp_physical());
+              experiment.set_memfp_threshold(configuration().get_aging_memfp_threshold());
+              experiment.set_cooloff(chrono::seconds{configuration().get_aging_cooloff_seconds()});
+
+              auto result = experiment.execute();
+              if (configuration().has_database()) result.save(configuration().db());
+              random_vertex = result.get_random_vertex_id();
+
+              if (configuration().validate_inserts() && impl_upd->can_be_validated()) {
                 LOG("[driver] Validation of updates requested, loading the original graph from: " << path_graph);
-                auto stream = make_shared<graph::WeightedEdgeStream> ( configuration().get_path_graph() );
+                auto stream = make_shared<graph::WeightedEdgeStream>(configuration().get_path_graph());
                 num_validation_errors = validate_updates(impl_upd, stream);
+              }
             }
         }
     }
@@ -160,7 +201,7 @@ static void run_standalone(int argc, char* argv[]){
         configuration().db()->store_parameters(params);
     }
 
-    if(configuration().num_repetitions() > 0){
+    if(configuration().num_repetitions() > 0 && !configuration().is_mixed_workload()){
 
 #if defined(HAVE_OPENMP)
         if(configuration().num_threads(ThreadsType::THREADS_READ) != 0 ){
