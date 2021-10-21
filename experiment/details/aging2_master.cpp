@@ -87,7 +87,7 @@ Aging2Master::Aging2Master(const Aging2Experiment& parameters) :
 Aging2Master::~Aging2Master(){
     for(auto w: m_workers){ delete w; }
     m_workers.clear();
-    m_parameters.m_library->on_thread_destroy(m_parameters.m_num_threads);
+    m_parameters.m_library->on_thread_destroy(m_parameters.m_num_threads + 1);
     m_parameters.m_library->on_main_destroy();
 
     delete[] m_reported_times; m_reported_times = nullptr;
@@ -307,7 +307,16 @@ void Aging2Master::wait_and_record() {
     } while(!done && !m_stop_experiment);
 
     if(m_stop_experiment){ // wait the workers to terminate
-        for(auto& w : m_workers) w->wait();
+        for(auto i = 0; i < m_workers.size(); i++) {
+          auto& w = m_workers[i];
+          auto until = chrono::steady_clock::now() + 5 * 60s;
+          auto idle = w->wait(until);
+          if (!idle) {
+            cerr << "Worker " << i << " not idle and it is " << w->is_in_library_code() << " library code." << endl;
+            m_results.m_thread_deadlocked = true;
+            m_results.m_in_library_code = w->is_in_library_code();
+          }
+        }
     }
 }
 

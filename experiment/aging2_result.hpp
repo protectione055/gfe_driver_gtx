@@ -55,6 +55,8 @@ class Aging2Result {
     std::shared_ptr<details::LatencyStatistics[]> m_latency_stats; // 3 items, 0 = insertions, 1 = deletions, 2 = both insertions & deletions
     bool m_timeout_hit = false; // whether the experiment terminated due to the internal timeout
     bool m_memfp_threshold_passed = false; // whether the experiment terminated due to the excessive usage of memory
+    bool m_thread_deadlocked = false; // Whether a worker thread deadlocked
+    bool m_in_library_code = false; // Whether a worker thread deadlocked in library code
 
 public:
     // Default ctor

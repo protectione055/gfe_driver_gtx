@@ -159,9 +159,11 @@ static void run_standalone(int argc, char* argv[]){
               configuration().blacklist(properties);
               GraphalyticsSequential exp_seq { impl_ga, configuration().num_repetitions(), properties };
 
-              MixedWorkload experiment(agingExperiment, exp_seq);
+              MixedWorkload experiment(agingExperiment, exp_seq, configuration().num_threads(ThreadsType::THREADS_READ));
               auto result = experiment.execute();
+              cout << "Saving result" << endl;
               if (configuration().has_database()) result.save(configuration().db());
+              cout << "Done saving" << endl;
             } else {
               LOG("[driver] Number of concurrent threads: " << configuration().num_threads(THREADS_WRITE));
               LOG("[driver] Aging2, path to the log of updates: " << configuration().get_update_log());

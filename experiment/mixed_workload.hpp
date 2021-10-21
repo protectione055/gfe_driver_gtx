@@ -9,13 +9,15 @@ namespace gfe::experiment {
 
     class MixedWorkload {
     public:
-        MixedWorkload(Aging2Experiment& aging_experiment, GraphalyticsSequential& graphalytics)
-          : m_aging_experiment(aging_experiment), m_graphalytics(graphalytics) {}
+        MixedWorkload(Aging2Experiment& aging_experiment, GraphalyticsSequential& graphalytics, int read_threads)
+          : m_aging_experiment(aging_experiment), m_graphalytics(graphalytics), m_read_threads(read_threads) {}
 
         MixedWorkloadResult execute();
     private:
         Aging2Experiment& m_aging_experiment;
         GraphalyticsSequential& m_graphalytics;
+
+        int m_read_threads = 0;
     };
 
 }

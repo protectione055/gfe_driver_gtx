@@ -321,13 +321,15 @@ void Aging2Worker::main_load_edges(uint64_t* edges, uint64_t num_edges){
 
 void Aging2Worker::main_remove_vertices(uint64_t* vertices, uint64_t num_vertices){
     auto pardegree = m_master.parameters().m_num_threads;
+    m_is_in_library_code = true;
 
     for(uint64_t i = 0; i < num_vertices; i++){
-        if(static_cast<int>(vertices[i] % pardegree) == m_worker_id){
-            COUT_DEBUG("Remove vertex: " << vertices[i]);
-            m_library->remove_vertex(vertices[i]);
-        }
-    }
+          if(static_cast<int>(vertices[i] % pardegree) == m_worker_id){
+              COUT_DEBUG("Remove vertex: " << vertices[i]);
+              m_library->remove_vertex(vertices[i]);
+          }
+      }
+    m_is_in_library_code = false;
 }
 
 /*****************************************************************************
@@ -368,7 +370,7 @@ template<bool with_latency>
 void Aging2Worker::graph_insert_edge(graph::WeightedEdge edge){
     if(!m_master.is_directed() && m_uniform(m_random) < 0.5) edge.swap_src_dst(); // noise
     COUT_DEBUG("edge: " << edge);
-
+     m_is_in_library_code = true;
     if(with_latency == false){
         // the function returns true if the edge has been inserted. Repeat the loop if it cannot insert the edge as one of
         // the vertices is still being inserted by another thread
@@ -384,14 +386,14 @@ void Aging2Worker::graph_insert_edge(graph::WeightedEdge edge){
         m_latency_insertions[0] = chrono::duration_cast<chrono::nanoseconds>(t1 - t0).count();
         m_latency_insertions++;
     }
-
+    m_is_in_library_code = false;
 }
 
 template<bool with_latency>
 void Aging2Worker::graph_remove_edge(graph::Edge edge, bool force){
     if(!m_master.is_directed() && m_uniform(m_random) < 0.5) edge.swap_src_dst(); // noise
     COUT_DEBUG("edge: " << edge);
-
+    m_is_in_library_code = true;
     if(with_latency == false){
 
         if(!force){
@@ -403,6 +405,7 @@ void Aging2Worker::graph_remove_edge(graph::Edge edge, bool force){
     } else { // measure the latency of the deletion
         chrono::steady_clock::time_point t0, t1;
 
+        m_is_in_library_code = true;
         t0 = chrono::steady_clock::now();
         if(!force){
             m_library->remove_edge(edge);
@@ -414,7 +417,7 @@ void Aging2Worker::graph_remove_edge(graph::Edge edge, bool force){
         m_latency_deletions[0] = chrono::duration_cast<chrono::nanoseconds>(t1 - t0).count();
         m_latency_deletions++;
     }
-
+    m_is_in_library_code = false;
 }
 
 uint64_t Aging2Worker::granularity() const{
@@ -435,6 +438,10 @@ uint64_t Aging2Worker::num_operations() const {
 
 uint64_t Aging2Worker::memory_footprint() const {
     return m_updates_mem_usage;
+}
+
+bool Aging2Worker::is_in_library_code() const {
+  return m_is_in_library_code;
 }
 
 } // namespace
