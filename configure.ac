@@ -593,7 +593,7 @@ if ( test x"${with_sortledton}" != x"" && test x"${with_sortledton}" != "no" ); 
     # Try to compile a program with Sortledton
     AC_LINK_IFELSE([
         AC_LANG_PROGRAM([[
-            @%:@include <versioning/TransactionManager.h>
+            @%:@include <data-structure/TransactionManager.h>
         ]], [[
             TransactionManager tm(1);
         ]])
