@@ -11,7 +11,6 @@
 #include "third-party/gapbs/gapbs.hpp"
 
 #include "common/timer.hpp"
-#include "third-party/gapbs/gapbs.hpp"
 #include "utility/timeout_service.hpp"
 
 #include "not_implemented.hpp"
