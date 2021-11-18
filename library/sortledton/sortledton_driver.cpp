@@ -191,14 +191,30 @@ namespace gfe::library {
       assert(!m_is_directed);
 
       thread_local optional <SnapshotTransaction> tx_o = nullopt;
+      edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
+
+//      bool insertion = true;
+//      if (tx_o.has_value()) {
+//        tm.getSnapshotTransaction(ds, false, *tx_o);
+//        auto tx = *tx_o;
+//
+//        bool exists = tx.has_edge(internal_edge);
+//        bool exists_reverse = tx.has_edge({internal_edge.dst, internal_edge.src});
+//        if (exists != exists_reverse) {
+//          cout << "Edge existed in only one direction" << endl;
+//        }
+//        if (exists) {
+//          insertion = false;
+//        }
+//        tm.transactionCompleted(tx);
+//      }
+
       if (tx_o.has_value()) {
         tm.getSnapshotTransaction(ds, true, *tx_o);
       } else {
         tx_o = tm.getSnapshotTransaction(ds, true);
       }
       auto tx = *tx_o;
-
-      edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
 
       tx.use_vertex_does_not_exists_semantics();
 
@@ -212,6 +228,30 @@ namespace gfe::library {
       inserted &= tx.execute();
 
       tm.transactionCompleted(tx);
+
+//      tm.getSnapshotTransaction(ds, false, *tx_o);
+//      tx = *tx_o;
+//      double out;
+//      double out_reverse;
+//      bool exists = tx.get_weight(internal_edge, (char*) &out);
+//      bool exists_reverse = tx.get_weight({internal_edge.dst, internal_edge.src}, (char*) &out_reverse);
+//      if (!exists) {
+//        cout << "Forward edge does not exist." << endl;
+//      }
+//      if (!exists_reverse) {
+//        cout << "Backward edge does not exist." << endl;
+//      }
+//      if (out != out_reverse) {
+//        cout << "Edge sites have unequal weight: " << out << " " << out_reverse << endl;
+//        cout << "This was an insertion: " << insertion << endl;
+//        cout << "In neighbourhood: " << tx.neighbourhood_size(internal_edge.src) <<
+//        " " << tx.neighbourhood_size(internal_edge.dst) << endl;
+//      }
+//      if (out != e.m_weight) {
+//        cout << "Weight incorrect: " << e.m_weight << " " << out << endl;
+//        cout << "This was an insertion: " << insertion << endl;
+//      }
+//      tm.transactionCompleted(tx);
       return inserted;
     }
 
@@ -292,9 +332,10 @@ namespace gfe::library {
 
     void SortledtonDriver::bfs(uint64_t source_vertex_id, const char *dump2file) {
       tm.register_thread(0);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
+
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
       auto physical_src = tx.physical_id(source_vertex_id);
 
       Timer t;
@@ -315,9 +356,9 @@ namespace gfe::library {
 
     void SortledtonDriver::pagerank(uint64_t num_iterations, double damping_factor, const char *dump2file) {
       tm.register_thread(0);
-      run_gc();
-
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
+
+      run_gc();
 
       auto pr = PageRank::page_rank_bs(tx, num_iterations, damping_factor);;
       auto external_ids = translate<double>(tx, pr);
@@ -332,9 +373,10 @@ namespace gfe::library {
 
     void SortledtonDriver::wcc(const char *dump2file) {
       tm.register_thread(0);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
+
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
       auto clusters = WCC::gapbs_wcc(tx);
       auto external_ids = translate<uint64_t>(tx, clusters);
@@ -349,9 +391,9 @@ namespace gfe::library {
 
     void SortledtonDriver::cdlp(uint64_t max_iterations, const char *dump2file) {
       tm.register_thread(0);
-      run_gc();
-
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
+
+      run_gc();
 
       auto clusters = CDLP::teseo_cdlp(tx, max_iterations);
       auto external_ids = translate<uint64_t>(tx, clusters);
@@ -366,9 +408,10 @@ namespace gfe::library {
 
     void SortledtonDriver::sssp(uint64_t source_vertex_id, const char *dump2file) {
       tm.register_thread(0);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
+
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
       auto physical_src = tx.physical_id(source_vertex_id);
 
       auto distances = SSSP::gabbs_sssp(tx, physical_src, 2.0);
@@ -610,9 +653,10 @@ namespace gfe::library {
 
     void SortledtonDriver::lcc(const char *dump2file) {
       tm.register_thread(0);
+      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
+
       run_gc();
 
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
       auto lcc_values = GFELCC::execute(tx);
 
