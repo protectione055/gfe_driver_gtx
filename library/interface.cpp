@@ -373,7 +373,31 @@ vector<ImplementationManifest> implementations() {
      * - Fixes running debug code in release version
      * - compiles with O3 -march native and -mtune native
      **/
-    result.emplace_back("sortledton.3", "Sortledton", &generate_sortledton);
+//    result.emplace_back("sortledton.3", "Sortledton", &generate_sortledton);
+      /**
+       * Test version used to try an incorrect system.
+       */
+//    result.emplace_back("sortledton-no-size-versioning", "Sortledton", &generate_sortledton);
+      /**
+       * Sortledton with steam gc implementation for adjacency set sizes.
+       */
+//    result.emplace_back("sortledton-steam-gc", "Sortledton", &generate_sortledton);
+      /**
+       * Sorltedton with steam gc implementation for adjacency set sizes and edge version chains.
+       *
+       * Measurements contained some debug code for the isolated workloads. We measure these again.
+       */
+//    result.emplace_back("sortledton-steam-gc-1", "Sortledton", &generate_sortledton);
+//    result.emplace_back("sortledton-steam-gc-2", "Sortledton", &generate_sortledton);
+  /**
+   * Clean measurements with steam GC for both sizes and edges.
+   */
+    result.emplace_back("sortledton.4", "Sortledton", &generate_sortledton);
+    /**
+     * Tests version chain garbage collection for edges during analytics.
+     * This did not win analytics latency.
+     */
+//    result.emplace_back("sortledton-steam-gc-3", "Sortledton", &generate_sortledton);
 #endif
 
 #if defined(HAVE_MICROBENCHMARKS)
