@@ -134,7 +134,13 @@ Aging2Result Aging2Experiment::execute(){
     if(m_path_log.empty()) ERROR("Path to the log file not set. Use #set_log to set it.")
 
     m_master = new details::Aging2Master(*this);
-    return m_master->execute();
+    auto result = m_master->execute();
+
+    // Master should be deleted here to ensure the same thread that called the constructor it also calls the destructor
+    // So, the on_thread_init matches the on_thread_destroy.
+    delete m_master;
+    m_master = nullptr;
+    return result;
 }
 
 double Aging2Experiment::progress_so_far() {
