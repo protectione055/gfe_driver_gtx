@@ -93,6 +93,7 @@ class Configuration {
     bool m_validate_output = false; // whether to validate the execution results of the Graphalytics algorithms
     size_t m_block_size = 1024;  // Block size for Sortledton to use
     bool m_is_mixed_workload = false;
+    bool m_is_timestamped_graph = false;
 
     void set_aging_cooloff_seconds(uint64_t value);
     void set_aging_memfp_threshold(uint64_t bytes);
@@ -110,6 +111,7 @@ class Configuration {
     void set_timeout_graphalytics(uint64_t seconds); // Set the timeout property
     void set_graph(const std::string& graph); // Set the graph to load and run the experiments
     void set_block_size(size_t block_size);
+    void set_is_timestamped(bool timestamped);
 
     // Set the path to the database
     void set_database_path(const std::string& path){ m_database_path = path; }
@@ -240,6 +242,8 @@ public:
     size_t block_size();
 
     bool is_mixed_workload() const;
+
+    bool is_timestamped_graph() const;
 };
 
 } // namespace

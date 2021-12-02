@@ -106,7 +106,12 @@ static void run_standalone(int argc, char* argv[]){
         if(configuration().get_update_log().empty()){
             LOG("[driver] Using the graph " << path_graph);
             auto stream = make_shared<graph::WeightedEdgeStream> ( configuration().get_path_graph() );
-            stream->permute();
+            if (!configuration().is_timestamped_graph()) {
+              LOG("[driver] graph is not sorted by timestamp: permuting");
+              stream->permute();
+            } else {
+              LOG("[driver] graph is sorted by timestamp: no shuffling");
+            }
             if(stream->num_edges() > 0) random_vertex = stream->get(0).m_source;
 
             LOG("[driver] Number of concurrent threads: " << configuration().num_threads(THREADS_WRITE) );

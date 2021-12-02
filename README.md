@@ -178,9 +178,11 @@ In our experiments, we used the following input graphs and data sets:
 - `uniform-SF`, with `SF` in {22, 24, 26} were generated with an [ad-hoc tool](https://github.com/whatsthecraic/uniform_graph_generator). These are synthetic graphs having the same number of vertices and edges of `graph500-SF`, but a uniform node degree distribution.
 - The logs for the experiments with updates, i.e. with both insertions and deletions,
   were generated with another [ad-hoc tool](https://github.com/whatsthecraic/graphlog). 
+- `yahoo-songs` and `edit-enwiki` were taken from the [Konect webpage](http://konect.cc/networks/) they were prepared 
+  for our experiments by sorting them by timestamp and removing duplicates by using `tools/timestampd_graph_2_edge_list.py`.  
 
 A complete image of all datasets used in the experiments can be downloaded from Zenodo: [input graphs](https://zenodo.org/record/3966439),
-[graph logs](https://zenodo.org/record/3967002), [dense friendster](https://zenodo.org/record/5146230).
+[graph logs](https://zenodo.org/record/3967002), [dense friendster](https://zenodo.org/record/5146230) and [timestamped graphs](TODO).
 
 ### Executing the driver
 
@@ -263,7 +265,7 @@ For all graphs with 5 runs.
 ./gfe_driver  -u  -R 5 -d ./results.sqlite3 -l edgeiter_sorted_vector_al.3 -G /path/to/input/graph.properties -w 56
 ```
 
-##### Insertions and Graphalytics (Figure 9 and 12)
+##### Insertions and Graphalytics (Figure 9, 10 and 13)
 
 For all graphs with 5 runs.
 ```bash
@@ -282,7 +284,17 @@ The graphs `graph.properties-dense` are analogous to their corresponding `graph.
 but with the vertices relabelled into a dense domain. These graphs are included in the archive
 loaded in [Zenodo](https://zenodo.org/record/3966439) and [dense friendster](https://zenodo.org/record/5146230).
 
-##### Scalability (Figure 10)
+For `yahoo-songs` and `wiki_edit` graphs with 5 runs:1
+```bash
+./gfe_driver  -u  -R 0 -d ./results.sqlite3 -l teseo-lcc.12 -G /path/to/input/graph -w 56 -r 32 --is_timestamped true
+./gfe_driver  -u  -R 0 -d ./results.sqlite3 -l stinger7-ref -G /path/to/input/graph -w 56 -r 32 --is_timestamped true
+./gfe_driver  -u  -R 0 -d ./results.sqlite3 -l livegraph3_ro -G /path/to/input/graph -w 20 -r 32 --is_timestamped true
+./gfe_driver  -u  -R 0 -d ./results.sqlite3 -l llama8-ref -G /path/to/input/graph -w 16 -r 32 --build_frequency 10s --is_timestamped true
+./gfe_driver  -u  -R 0 -d ./results.sqlite3 -l g1_v6-ref-ignore-build -G /path/to/input/graph -w 20 -r 32 --is_timestamped true
+./gfe_driver  -u  -R 0 -d ./results.sqlite3 -l sortledton.4 -G /path/to/input/graph -w 56 -r 32 --is_timestamped true --block_size 512
+```
+
+##### Scalability (Figure 12)
 For `graph500-24` and p in {1,2,4,8,14,28,42,56} and 5 runs.
 
 ```bash
