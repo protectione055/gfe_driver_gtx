@@ -345,6 +345,19 @@ from the file, as it may (or may not) recycled by the libraries.
 With the memory footprint, for LLAMA, it's not necessary to set `--aging_timeout 4h` as 
 `--aging_memfp_threshold 330G` already acts as a guard on the overall memory consumption.
 
+#### Mixed updates and analytics (Figure 14)
+
+For all combinations of reading ($r in \[1, 2, 4, 8, 16, 32\]) and writing threads ($w in \[16, 48\]).
+```bash
+# BFS
+./gfe_driver  -u  -R 3 -d results.sqlite3 -l sortledton.4 -G /path/to/graph500-24.properties -w $w -r $r --blacklist sssp,cdlp,pagerank,wcc,lcc --log /path/to/graph500-24-1.0.graphlog --aging_timeout 2h --mixed_workload true --block_size 512
+./gfe_driver  -u  -R 3 -d results.sqlite3 -l livegraph3_ro -G /path/to/graph500-24.properties -w $w -r $r --blacklist sssp,cdlp,pagerank,wcc,lcc --log /path/to/graph500-24-1.0.graphlog --aging_timeout 2h --mixed_workload true
+
+# Pagerank
+./gfe_driver  -u  -R 3 -d results.sqlite3 -l sortledton.4 -G /path/to/graph500-24.properties -w $w -r $r --blacklist sssp,cdlp,bfs,wcc,lcc --log /path/to/graph500-24-1.0.graphlog --aging_timeout 2h --mixed_workload true --block_size 512
+./gfe_driver  -u  -R 3 -d results.sqlite3 -l livegraph3_ro -G /path/to/graph500-24.properties -w $w -r $r --blacklist sssp,cdlp,bfs,wcc,lcc --log /path/to/graph500-24-1.0.graphlog --aging_timeout 2h --mixed_workload true
+```
+
 #### Produce Plots
 
 Download our data from [Zenodo](https://zenodo.org/record/5155577) or generate the data with scripts mentioned above.
