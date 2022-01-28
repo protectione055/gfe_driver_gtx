@@ -382,6 +382,7 @@ elif ( test x"${with_llama}" != x"yes" && test x"${with_llama}" != x"auto" ); th
 
     AC_CHECK_FILE([${with_llama}/llama.h], [llama_includedir="${with_llama}"])
     
+
     if( test x"${llama_includedir}" == x"" ); then
         AC_CHECK_FILE([${with_llama}/include/llama.h], [llama_includedir="${with_llama}/include"])
     fi
@@ -605,6 +606,54 @@ if ( test x"${with_sortledton}" != x"" && test x"${with_sortledton}" != "no" ); 
     AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_SORTLEDTON"])
 fi
 
+#############################################################################
+# Support for the Sortledton V2
+# Usage:
+# --with-sortledton=/path/to/sortledton_v2/build
+#
+
+AC_ARG_WITH([sortledtonv2], [AS_HELP_STRING([--with-sortledtonv2@<:@=ARG@:>@], [
+    Enable the support to Sortledton V2. The argument needs to be the path where the library has been built.
+])], [])
+
+if ( test x"${with_sortledtonv2}" != x"" && test x"${with_sortledtonv2}" != "no" ); then
+    if( test x"${with_sortledtonv2}" == x"yes" ); then
+        AC_MSG_ERROR(["the full path to the Sortledton build needs to be specified, e.g. --with-sortledton=/path/to/sortledton/build"]);
+    fi
+
+    MY_INTEL_TBB()
+
+    path_sortledton=$(realpath "${with_sortledtonv2}")
+    path_sortledton_library="${path_sortledton}/libsortledton_v2.a"
+    AC_CHECK_FILE([${path_sortledton_library}], [  ],  [ AC_MSG_ERROR([file not found: ${path_sortledton_library}]) ])
+
+    path_sortledton_makefile="${path_sortledton}/Makefile"
+    AC_CHECK_FILE([${path_sortledton_makefile}], [  ],  [ AC_MSG_ERROR(["file not found: ${path_sortledton_makefile}"]) ])
+
+    path_sortledton_includedir=$(realpath "${path_sortledton}/../")
+    AC_MSG_NOTICE([Sortledton include path: ${path_sortledton_includedir}])
+
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_sortledton_includedir} -I${path_sortledton}/include"])
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_sortledton_includedir}/src/algorithms -I${path_sortledton_includedir}/include -I${path_sortledton_includedir}/src"])
+    # TODO clean up include structure in sortledton
+    AS_VAR_SET([LIBS], ["-L${path_sortledton} -lsortledton_v2 ${LIBS}"])
+
+
+# TODO better compile test
+# Try to compile a program with Sortledton
+    AC_LINK_IFELSE([
+        AC_LANG_PROGRAM([[
+            @%:@include <data_types.hpp>
+        ]], [[
+            int i = 0;
+        ]])
+    ], [], [
+        AC_MSG_FAILURE([unable to compile and link an executable with Sortledton V2])
+    ])
+
+    AC_MSG_NOTICE([Sortledton V2 support enabled])
+    AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_SORTLEDTONV2"])
+fi
 
 #############################################################################
 # Support for the Microbenchmarks

@@ -61,6 +61,10 @@
 #include "sortledton/sortledton_driver.hpp"
 #endif
 
+#if defined(HAVE_SORTLEDTONV2)
+#include "sortledton_v2/sortledton_driver_v2.hpp"
+#endif
+
 #if defined(HAVE_MICROBENCHMARKS)
 #include "microbenchmarks/microbenchmarks_driver.hpp"
 #endif
@@ -229,6 +233,14 @@ std::unique_ptr<Interface> generate_sortledton(bool directed_graph) {
 }
 #endif
 
+#if defined(HAVE_SORTLEDTONV2)
+std::unique_ptr<Interface> generate_sortledton_v2(bool directed_graph) {
+    auto& config = configuration();
+    cout << "Running Sortledton V2 with block size: " << config.block_size() << endl;
+    return unique_ptr<Interface>{ new SortledtonDriverV2(directed_graph, config.block_size()) };
+}
+#endif
+
 #if defined(HAVE_MICROBENCHMARKS)
 std::unique_ptr<Interface> generate_microbenchmarks(bool directed_graph) {
   auto& config = configuration();
@@ -323,11 +335,12 @@ vector<ImplementationManifest> implementations() {
     // v10 08/01/2021: set the thread affinity by default
     // v11 14/04/2021: Fix the predicate in the TimeoutService
     // v12 19/04/2021: Materialization with a vector (12b, bogus translation IDs in TeseoRealVertices)
-    result.emplace_back("teseo.12", "Teseo", &generate_teseo);
-    result.emplace_back("teseo-rw.12", "Teseo. Use read-write transactions for graphalytics, to measure their overhead", &generate_teseo_rw);
-    result.emplace_back("teseo-lcc.12", "Teseo with a tuned implementation of the LCC kernel", &generate_teseo_lcc);
-    result.emplace_back("teseo-dv.12b", "Teseo, dense vertices", &generate_teseo_real_vtx);
-    result.emplace_back("teseo-lcc-dv.12b", "Teseo, dense vertices and sort-merge implementation of the LCC kernel", &generate_teseo_real_vtx_lcc);
+    // v13 08/12/2021: Vertex table: uses pseudorandom hash function to avoid clustering on en-wiki dataset
+    result.emplace_back("teseo.13", "Teseo", &generate_teseo);
+    result.emplace_back("teseo-rw.13", "Teseo. Use read-write transactions for graphalytics, to measure their overhead", &generate_teseo_rw);
+    result.emplace_back("teseo-lcc.13", "Teseo with a tuned implementation of the LCC kernel", &generate_teseo_lcc);
+    result.emplace_back("teseo-dv.13b", "Teseo, dense vertices", &generate_teseo_real_vtx);
+    result.emplace_back("teseo-lcc-dv.13b", "Teseo, dense vertices and sort-merge implementation of the LCC kernel", &generate_teseo_real_vtx_lcc);
 #endif
 
 #if defined(HAVE_SORTLEDTON)
@@ -398,6 +411,10 @@ vector<ImplementationManifest> implementations() {
      * This did not win analytics latency.
      */
 //    result.emplace_back("sortledton-steam-gc-3", "Sortledton", &generate_sortledton);
+#endif
+
+#if defined(HAVE_SORTLEDTONV2)
+    result.emplace_back("sortledton.v2.1", "Sortledton V2", &generate_sortledton_v2);
 #endif
 
 #if defined(HAVE_MICROBENCHMARKS)
