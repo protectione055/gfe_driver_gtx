@@ -13,7 +13,7 @@ import sys
 import os
 
 def parse_edge(line):
-    src, dst, _, timestamp = line.split(' ')
+    src, dst, _, timestamp = line.split('\t')
     return (int(src), int(dst), int(timestamp))
 
 input_path = sys.argv[1]
@@ -30,6 +30,8 @@ with open(input_path, 'r') as input_file:
         src, dst, timestamp = parse_edge(line)
         if src > dst:
             dst, src = src, dst
+        if src == dst:
+            continue   # We do not allow self edges
         if (src, dst) not in dedup_set:
             dedup_set.add((src, dst))
             edges.append(parse_edge(line))
