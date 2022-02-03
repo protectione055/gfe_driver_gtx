@@ -73,7 +73,6 @@ namespace gfe::library {
     }
 
     bool SortledtonDriverV2::has_edge(uint64_t source, uint64_t destination) const {
-      run_gc();
       return tx.has_edge(sortledton::edge_t{static_cast<sortledton::dst_t>(source), static_cast<sortledton::dst_t>(destination)});
     }
 
