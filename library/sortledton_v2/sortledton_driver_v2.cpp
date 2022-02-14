@@ -37,10 +37,6 @@ namespace gfe::library {
     SortledtonDriverV2::~SortledtonDriverV2() {
     }
 
-    bool SortledtonDriverV2::has_weights() const {
-      return false;
-    }
-
     void SortledtonDriverV2::on_main_init(int num_threads) {
 //      tm.reset_max_threads(num_threads);
     }
@@ -140,10 +136,9 @@ namespace gfe::library {
       assert(!m_is_directed);
       sortledton::edge_t internal_edge{static_cast<sortledton::dst_t>(e.source()), static_cast<sortledton::dst_t>(e.destination())};
 
-      // TODO change for weigthed.
       sortledton::edge_t opposite{static_cast<sortledton::dst_t>(e.destination()), static_cast<sortledton::dst_t>(e.source())};
-      tx.insert_edge(internal_edge);
-      tx.insert_edge(opposite);
+      tx.insert_edge(internal_edge, e.weight());
+      tx.insert_edge(opposite, e.weight());
       return true;
 
 //      thread_local optional <SnapshotTransaction> tx_o = nullopt;
@@ -183,11 +178,10 @@ namespace gfe::library {
 //      thread_local optional <SnapshotTransaction> tx_o = nullopt;
       sortledton::edge_t internal_edge{static_cast<sortledton::dst_t>(e.source()), static_cast<sortledton::dst_t>(e.destination())};
       sortledton::edge_t opposite{static_cast<sortledton::dst_t>(e.destination()), static_cast<sortledton::dst_t>(e.source())};
-      while(!tx.has_vertex(internal_edge.src)) { tx.insert_vertex(internal_edge.src); };
-      while(!tx.has_vertex(internal_edge.dst)) { tx.insert_vertex(internal_edge.dst); };
-      tx.insert_edge(internal_edge);
-      tx.insert_edge(opposite);
-      return true;
+
+      bool i = tx.insert_edge(internal_edge, e.weight());
+      i &= tx.insert_edge(opposite, e.weight());
+      return i;
 
 //      bool insertion = true;
 //      if (tx_o.has_value()) {

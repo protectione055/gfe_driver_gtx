@@ -78,8 +78,6 @@ using namespace std;
          */
         virtual ~SortledtonDriverV2();
 
-        bool has_weights() const override; // TODO remove once weights are implemented.
-
         /**
          * Dump the content of the graph to given stream
          */
