@@ -109,6 +109,10 @@ ifneq (,$(findstring -DHAVE_SORTLEDTONV2,${ALL_CPPFLAGS}))
 	sources += $(addprefix library/sortledton_v2/, sortledton_driver_v2.cpp)
 endif
 
+ifneq (,$(findstring -DHAVE_BWGRAPH,${ALL_CPPFLAGS}))
+	sources += $(addprefix library/bwgraph/, bwgraph_driver.cpp)
+endif
+
 ifneq (,$(findstring -DHAVE_MICROBENCHMARKS,${ALL_CPPFLAGS}))
 	sources += $(addprefix library/microbenchmarks/, microbenchmarks_driver.cpp)
 endif

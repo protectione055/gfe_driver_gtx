@@ -293,6 +293,53 @@ if ( test x"${with_teseo}" != x"" && test x"${with_teseo}" != "no" ); then
 fi
 
 #############################################################################
+# Support for the BwGraph
+# Usage:
+# --with-bwgraph=/path/to/bwgraph/build
+#
+
+AC_ARG_WITH([bwgraph], [AS_HELP_STRING([--with-bwgraph@<:@=ARG@:>@], [
+    Enable the support to BwGraph. The argument needs to be the path where the library has been built.
+])], [])
+
+if ( test x"${with_bwgraph}" != x"" && test x"${with_bwgraph}" != "no" ); then
+    if( test x"${with_bwgraph}" == x"yes" ); then
+        AC_MSG_ERROR(["the full path to the BwGraph build needs to be specified, e.g. --with-bwgraph=/path/to/bwgraph/build"]);
+    fi
+
+    MY_INTEL_TBB()
+
+    path_bwgraph=$(realpath "${with_bwgraph}")
+    path_bwgraph_library="${path_bwgraph}/libbwgraph.so"
+    AC_CHECK_FILE([${path_bwgraph_library}], [  ],  [ AC_MSG_ERROR([file not found: ${path_bwgraph_library}]) ])
+
+    path_bwgraph_makefile="${path_bwgraph}/Makefile"
+    AC_CHECK_FILE([${path_bwgraph_makefile}], [  ],  [ AC_MSG_ERROR(["file not found: ${path_bwgraph_makefile}"]) ])
+
+    path_bwgraph_includedir=$(realpath "${path_bwgraph}/../")
+    AC_MSG_NOTICE([BwGraph include path: ${path_bwgraph_includedir}])
+
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_bwgraph_includedir} -I${path_bwgraph}/include"])
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_bwgraph_includedir}/bind -I${path_bwgraph_includedir}/core -I${path_bwgraph}/include"])
+    # TODO clean up include structure in bwgraph
+    AS_VAR_SET([LIBS], ["-L${path_bwgraph} -lbwgraph ${LIBS}"])
+
+    # Try to compile a program with BwGraph
+    AC_LINK_IFELSE([
+        AC_LANG_PROGRAM([[
+            @%:@include "bwgraph.hpp"
+        ]], [[
+            bg::Graph g;
+        ]])
+    ], [], [
+        AC_MSG_FAILURE([unable to compile and link an executable with BwGraph])
+    ])
+
+    AC_MSG_NOTICE([BwGraph support enabled])
+    AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_BWGRAPH"])
+fi
+
+#############################################################################
 # Support for the library Stinger
 # Usage:
 # default (auto) => attempts to link with stinger, but it does not abort in case it cannot 

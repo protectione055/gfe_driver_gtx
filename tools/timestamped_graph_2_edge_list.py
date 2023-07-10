@@ -13,7 +13,7 @@ import sys
 import os
 
 def parse_edge(line):
-    src, dst, _, timestamp = line.split('\t')
+    src, dst, _, timestamp = line.split()
     return (int(src), int(dst), int(timestamp))
 
 input_path = sys.argv[1]

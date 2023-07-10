@@ -58,10 +58,19 @@ static void run_sequential(library::UpdateInterface* interface, graph::WeightedE
         assert(result == true && "Edge not inserted");
     }
 }
-
+static void run_concurrent(library::UpdateInterface* interface, graph::WeightedEdgeStream* graph, uint64_t size, uint64_t total_thread_count, uint64_t thread_id){
+    for(uint64_t pos = thread_id; pos< size; pos+= total_thread_count){
+        auto edge = graph->get(pos);
+        [[maybe_unused]] bool result = interface->add_edge_v2(edge);
+        assert(result == true && "Edge not inserted");
+    }
+}
 void InsertOnly::execute_round_robin(){
+    LOG("Execute round robin");
     vector<thread> threads;
-
+#if HAVE_BWGRAPH
+    m_interface.get()->set_worker_thread_num(m_num_threads);
+#endif
     atomic<uint64_t> start_chunk_next = 0;
 
     for(int64_t i = 0; i < m_num_threads; i++){
@@ -88,7 +97,36 @@ void InsertOnly::execute_round_robin(){
     // wait for all threads to complete
     for(auto& t : threads) t.join();
 }
+void InsertOnly::execute_concurrent_by_timestamp() {
+    LOG("Execute interleaving");
+    vector<thread> threads;
 
+    atomic<uint64_t> start_chunk_next = 0;
+
+    for(int64_t i = 0; i < m_num_threads; i++){
+        threads.emplace_back([this, &start_chunk_next](int thread_id){
+            concurrency::set_thread_name("Worker #" + to_string(thread_id));
+
+            auto interface = m_interface.get();
+            auto graph = m_stream.get();
+            //uint64_t start;
+            const uint64_t size = graph->num_edges();
+
+            interface->on_thread_init(thread_id);
+            run_concurrent(interface,graph,size, m_num_threads, thread_id);
+          /*  while( (start = start_chunk_next.fetch_add(m_scheduler_granularity)) < size ){
+                uint64_t end = std::min<uint64_t>(start + m_scheduler_granularity, size);
+                run_sequential(interface, graph, start, end);
+            }*/
+
+            interface->on_thread_destroy(thread_id);
+
+        }, static_cast<int>(i));
+    }
+
+    // wait for all threads to complete
+    for(auto& t : threads) t.join();
+}
 chrono::microseconds InsertOnly::execute() {
     // re-adjust the scheduler granularity if there are too few insertions to perform
     if(m_stream->num_edges() / m_num_threads < m_scheduler_granularity){
@@ -104,6 +142,7 @@ chrono::microseconds InsertOnly::execute() {
     timer.start();
     BuildThread build_service { m_interface , static_cast<int>(m_num_threads), m_build_frequency };
     execute_round_robin();
+    //execute_concurrent_by_timestamp();
     build_service.stop();
     timer.stop();
     m_interface->updates_stop();

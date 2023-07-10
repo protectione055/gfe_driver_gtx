@@ -190,6 +190,8 @@ private:
     void batch_try_again(Action action, Edge edge);
 
 public:
+    //libin adds a set worker thread num function
+    virtual void set_worker_thread_num(uint64_t new_num){}
     /**
      * Add the given vertex to the graph
      * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)

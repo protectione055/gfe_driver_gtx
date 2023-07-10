@@ -65,6 +65,10 @@
 #include "sortledton_v2/sortledton_driver_v2.hpp"
 #endif
 
+#if defined(HAVE_BWGRAPH)
+#include "bwgraph/bwgraph_driver.hpp"
+#endif
+
 #if defined(HAVE_MICROBENCHMARKS)
 #include "microbenchmarks/microbenchmarks_driver.hpp"
 #endif
@@ -238,6 +242,15 @@ std::unique_ptr<Interface> generate_sortledton_v2(bool directed_graph) {
     auto& config = configuration();
     cout << "Running Sortledton V2 with block size: " << config.block_size() << endl;
     return unique_ptr<Interface>{ new SortledtonDriverV2(directed_graph, config.block_size()) };
+}
+#endif
+
+#if defined(HAVE_BWGRAPH)
+std::unique_ptr<Interface> generate_bwgraph_ro(bool directed_graph){ // read only transactions for Graphalytics
+    return unique_ptr<Interface>( new BwGraphDriver(directed_graph, /*read_only ? */ true));
+}
+std::unique_ptr<Interface> generate_bwgraph_rw(bool directed_graph){ // read-write transactions for Graphalytics
+    return unique_ptr<Interface>( new BwGraphDriver(directed_graph, /*read_only ? */ false));
 }
 #endif
 
@@ -415,6 +428,13 @@ vector<ImplementationManifest> implementations() {
 
 #if defined(HAVE_SORTLEDTONV2)
     result.emplace_back("sortledton.v2.1", "Sortledton V2", &generate_sortledton_v2);
+#endif
+
+#if defined(HAVE_BWGRAPH)
+    // v2 14/04/2021: Fix the predicate in the TimeoutService
+    // v3 25/04/2021: Materialization step with a vector
+    result.emplace_back("bwgraph_ro", "BwGraph, use read-only transactions for the Graphalytics kernels", &generate_bwgraph_ro);
+    result.emplace_back("bwgraph_rw", "BwGraph, use read-write transactions for the Graphalytics kernels", &generate_bwgraph_rw);
 #endif
 
 #if defined(HAVE_MICROBENCHMARKS)

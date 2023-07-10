@@ -45,7 +45,7 @@ class InsertOnly {
 
     // Execute the experiment with the round robin scheduler
     void execute_round_robin();
-
+    void execute_concurrent_by_timestamp();
 public:
     // Initialise the experiment
     // @param interface the system to evaluate, already instantiated
