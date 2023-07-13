@@ -192,6 +192,10 @@ private:
 public:
     //libin adds a set worker thread num function
     virtual void set_worker_thread_num(uint64_t new_num){}
+    //libin for debug: print out status at the end
+    virtual void on_edge_writes_finish(){}
+    //libin for bwgraph: gracefully exit worker thread because of lazy updates
+    virtual void thread_exit(){}
     /**
      * Add the given vertex to the graph
      * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)

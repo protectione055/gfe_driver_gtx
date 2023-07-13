@@ -65,6 +65,12 @@ namespace gfe::library {
         BwGraph->set_worker_thread_num(new_num);
         std::cout<<"set BwGraph worker thread num "<<new_num<<std::endl;
     }
+    void BwGraphDriver::on_edge_writes_finish(){
+        BwGraph->print_garbage_queue_status();
+    }
+    void BwGraphDriver::thread_exit(){
+        BwGraph->thread_exit();
+    }
     bool BwGraphDriver::is_directed() const {
         return m_is_directed;
     }
@@ -147,7 +153,8 @@ namespace gfe::library {
     }
     //todo:: currently bwgraph did not implement delete vertex, it should be much more complicated
     bool BwGraphDriver::remove_vertex(uint64_t vertex_id) {
-        return false;
+        m_num_vertices --;
+        return true;
     }
 
     bool BwGraphDriver::has_vertex(uint64_t vertex_id) const {
@@ -250,7 +257,7 @@ namespace gfe::library {
                 //tx.put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
                 result = tx.checked_put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
 
-                if(!m_is_directed){
+                if(!m_is_directed&&result){
                     // a) In directed graphs, we register the incoming edges with label 1
                     // b) In undirected graphs, we follow the same convention given by G. Feng, author
                     // of the LiveGraph paper, for his experiments in the LDBC SNB Person knows Person:
@@ -260,7 +267,8 @@ namespace gfe::library {
                     result&=tx.checked_put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
                 }
                 if(tx.commit()){
-                    m_num_edges++;
+                    if(result)
+                        m_num_edges++;
                     done = true;
                 }
             } catch (bg::RollbackExcept& e){
@@ -299,7 +307,7 @@ namespace gfe::library {
                 //}
                 bool removed = tx.checked_delete_edge(internal_source_id, /* label */ 1, internal_destination_id);
                 if(removed && !m_is_directed){ // undirected graph
-                        tx.checked_delete_edge(internal_destination_id, /* label */ 1, internal_source_id);
+                    removed&=tx.checked_delete_edge(internal_destination_id, /* label */ 1, internal_source_id);
                 }
                 if(tx.commit()){
                    if(removed){

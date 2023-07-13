@@ -276,6 +276,11 @@ void Aging2Worker::main_execute_updates(){
             m_updates.pop();
         }
     }
+    //for libin to understand
+    //std::cout<<"worker "<<m_worker_id<<" finished updating edges"<<std::endl;
+#if HAVE_BWGRAPH
+    m_library->thread_exit();
+#endif
 }
 
 

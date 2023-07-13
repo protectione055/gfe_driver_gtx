@@ -77,7 +77,9 @@ Aging2Master::Aging2Master(const Aging2Experiment& parameters) :
 
     // 1024 is a hack to avoid issues with small graphs
     m_reported_times = new uint64_t[static_cast<uint64_t>( m_parameters.m_num_reports_per_operations * ::ceil( static_cast<double>(num_operations_total())/num_edges_final_graph()) + 1 )]();
-
+#if HAVE_BWGRAPH
+    m_parameters.m_library->set_worker_thread_num(m_parameters.m_num_threads);
+#endif
     m_parameters.m_library->on_main_init(m_parameters.m_num_threads + /* this + builder service */ 2 + /* plus potentially an analytics runner (mixed epxeriment) */ 1);
 
     init_workers();
@@ -100,7 +102,9 @@ void Aging2Master::init_workers() {
     LOG("[Aging2] Initialising " << parameters().m_num_threads << " worker threads ... ");
 
     m_workers.reserve(parameters().m_num_threads);
-    for(uint64_t worker_id = 1; worker_id < parameters().m_num_threads; worker_id++){
+    //sortledton:version
+    //for(uint64_t worker_id = 1; worker_id < parameters().m_num_threads; worker_id++){
+    for(uint64_t worker_id = 0; worker_id < parameters().m_num_threads; worker_id++){
         m_workers.push_back ( new Aging2Worker(*this, worker_id) );
     }
 
@@ -193,6 +197,9 @@ void Aging2Master::do_run_experiment(){
     m_parameters.m_library->build(); // flush last changes
     m_parameters.m_library->updates_stop();
     timer.stop();
+#if HAVE_BWGRAPH
+    //m_parameters.m_library->on_edge_writes_finish();
+#endif
     LOG("[Aging2] Experiment completed!");
     LOG("[Aging2] Updates performed with " << parameters().m_num_threads << " threads in " << timer);
     cooloff(start_time);

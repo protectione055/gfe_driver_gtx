@@ -49,7 +49,8 @@ namespace gfe::library {
         BwGraphDriver(bool is_directed, bool read_only = true);
 
         virtual void set_worker_thread_num(uint64_t new_num);
-
+        virtual void on_edge_writes_finish();
+        virtual void thread_exit();
         virtual ~BwGraphDriver();
 
         virtual uint64_t num_edges() const;
