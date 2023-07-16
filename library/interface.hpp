@@ -271,6 +271,10 @@ public:
  */
 class GraphalyticsInterface : public virtual Interface {
 public:
+    /*
+     * Libin add this for bwgraph
+     */
+    virtual void set_worker_thread_num(uint64_t new_num){}
     /**
      * Perform a BFS from source_vertex_id to all the other vertices in the graph.
      * @param source_vertex_id the vertex where to start the search

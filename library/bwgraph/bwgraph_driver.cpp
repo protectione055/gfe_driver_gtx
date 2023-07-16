@@ -115,7 +115,9 @@ namespace gfe::library {
                 return *(reinterpret_cast<const uint64_t*>(payload.data()));
             }
         }else{
-            auto transaction = reinterpret_cast<bg::RWTransaction*>(opaque_transaction);
+            //auto transaction = reinterpret_cast<bg::RWTransaction*>(opaque_transaction);
+            //todo:: libin changed it here, just always use this one for our experiment?
+            auto transaction = reinterpret_cast<bg::SharedROTransaction*>(opaque_transaction);
             string_view payload = transaction->get_vertex(internal_vertex_id);//they store external vid in the vertex data for experiments
             if(payload.empty()){ // the vertex does not exist
                 return numeric_limits<uint64_t>::max();
@@ -385,12 +387,12 @@ namespace gfe::library {
         assert(transaction != nullptr && "Transaction object not specified");
         vector<pair<uint64_t, T>> output(data_sz);
 
-        for(uint64_t logical_id = 0; logical_id < data_sz; logical_id++){
+        for(uint64_t logical_id = 1; logical_id <= data_sz; logical_id++){
             uint64_t external_id = int2ext(transaction, logical_id);
             if(external_id == numeric_limits<uint64_t>::max()) { // the vertex does not exist
-                output[logical_id] = make_pair(numeric_limits<uint64_t>::max(), numeric_limits<T>::max()); // special marker
+                output[logical_id-1] = make_pair(numeric_limits<uint64_t>::max(), numeric_limits<T>::max()); // special marker
             } else {
-                output[logical_id] = make_pair(external_id, data[logical_id]);
+                output[logical_id-1] = make_pair(external_id, data[logical_id-1]);
             }
         }
 
@@ -488,21 +490,21 @@ namespace gfe::library {
 
 #pragma omp parallel for schedule(dynamic, 1024) reduction(+ : awake_count)
         for (uint64_t u = 1; u <= max_vertex_id; u++) {
-            if(distances[u] == numeric_limits<int64_t>::max()) continue; // the vertex does not exist
+            if(distances[u-1] == numeric_limits<int64_t>::max()) continue; // the vertex does not exist
             COUT_DEBUG_BFS("explore: " << u << ", distance: " << distances[u]);
 
-            if (distances[u] < 0){ // the node has not been visited yet
+            if (distances[u-1] < 0){ // the node has not been visited yet
                 auto iterator = transaction.simple_get_edges(u, /* label */ 1); // fixme: incoming edges for directed graphs
 
                 while(iterator.valid()){
                     uint64_t dst = iterator.dst_id();
                     COUT_DEBUG_BFS("\tincoming edge: " << dst);
 
-                    if(front.get_bit(dst)) {
+                    if(front.get_bit(dst-1)) {
                         COUT_DEBUG_BFS("\t-> distance updated to " << distance << " via vertex #" << dst);
-                        distances[u] = distance; // on each BUStep, all nodes will have the same distance
+                        distances[u-1] = distance; // on each BUStep, all nodes will have the same distance
                         awake_count++;
-                        next.set_bit(u);
+                        next.set_bit(u-1);
                         break;
                     }
 
@@ -530,8 +532,8 @@ namespace gfe::library {
                     uint64_t dst = iterator.dst_id();
                     COUT_DEBUG_BFS("\toutgoing edge: " << dst);
 
-                    int64_t curr_val = distances[dst];
-                    if (curr_val < 0 && gapbs::compare_and_swap(distances[dst], curr_val, distance)) {
+                    int64_t curr_val = distances[dst-1];
+                    if (curr_val < 0 && gapbs::compare_and_swap(distances[dst-1], curr_val, distance)) {
                         COUT_DEBUG_BFS("\t-> distance updated to " << distance << " via vertex #" << dst);
                         lqueue.push_back(dst);
                         scout_count += -curr_val;
@@ -551,7 +553,7 @@ namespace gfe::library {
 #pragma omp parallel for
         for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
             int64_t u = *q_iter;
-            bm.set_bit_atomic(u);
+            bm.set_bit_atomic(u-1);
         }
     }
 
@@ -562,7 +564,7 @@ namespace gfe::library {
             gapbs::QueueBuffer<int64_t> lqueue(queue);
 #pragma omp for
             for (uint64_t n=1; n <= max_vertex_id; n++)
-                if (bm.get_bit(n))
+                if (bm.get_bit(n-1))
                     lqueue.push_back(n);
             lqueue.flush();
         }
@@ -575,7 +577,7 @@ namespace gfe::library {
 #pragma omp parallel for
         for (uint64_t n = 1; n <= max_vertex_id; n++){
             if(transaction.get_vertex(n).empty()){ // the vertex does not exist
-                distances[n] = numeric_limits<int64_t>::max();
+                distances[n-1] = numeric_limits<int64_t>::max();
             } else { // the vertex exists
                 // Retrieve the out degree for the vertex n
                 uint64_t out_degree = 0;
@@ -585,7 +587,7 @@ namespace gfe::library {
                    // iterator.next();
                 }
 
-                distances[n] = out_degree != 0 ? - out_degree : -1;
+                distances[n-1] = out_degree != 0 ? - out_degree : -1;
             }
         }
 
@@ -671,6 +673,7 @@ namespace gfe::library {
 
         if(dump2file != nullptr) // store the results in the given file
             save_results<int64_t, false>(external_ids, dump2file);
+        std::cout<<"bfs over"<<std::endl;
     }
 /*****************************************************************************
  *                                                                           *
@@ -1001,7 +1004,7 @@ more consistent performance for undirected graphs.
             change = false; // reset the flag
 
 #pragma omp parallel for schedule(dynamic, 64) shared(change)
-            for(uint64_t v = 0; v < max_vertex_id; v++){
+            for(uint64_t v = 1; v <= max_vertex_id; v++){
                 if(labels0[v] == numeric_limits<uint64_t>::max()) continue; // the vertex does not exist
 
                 unordered_map<uint64_t, uint64_t> histogram;
@@ -1098,7 +1101,7 @@ more consistent performance for undirected graphs.
 
 
 #pragma omp parallel for schedule(dynamic, 64)
-        for(uint64_t v = 0; v < max_vertex_id; v++){
+        for(uint64_t v = 1; v <= max_vertex_id; v++){
             if(degrees_out[v] == numeric_limits<uint32_t>::max()) continue; // the vertex does not exist
 
             COUT_DEBUG_LCC("> Node " << v);

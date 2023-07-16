@@ -1,0 +1,10 @@
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 64 -d sortledton_yahoo_ordered_64.sqlite3 --is_timestamped true
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 56 -d sortledton_yahoo_ordered_56.sqlite3 --is_timestamped true
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 48 -d sortledton_yahoo_ordered_48.sqlite3 --is_timestamped true
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 40 -d sortledton_yahoo_ordered_40.sqlite3 --is_timestamped true
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 32 -d sortledton_yahoo_ordered_32.sqlite3 --is_timestamped true
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 24 -d sortledton_yahoo_ordered_24.sqlite3 --is_timestamped true
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 16 -d sortledton_yahoo_ordered_16.sqlite3 --is_timestamped true
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 12 -d sortledton_yahoo_ordered_12.sqlite3 --is_timestamped true
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 8 -d sortledton_yahoo_ordered_8.sqlite3 --is_timestamped true
+/home/zhou822/gfe_driver_bigdata/build/gfe_driver -G /home/zhou822/gfe_experiment_data/yahoo-song/out.yahoo-song.el -u -l sortledton.4 -w 4 -d sortledton_yahoo_ordered_4.sqlite3 --is_timestamped true

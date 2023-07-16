@@ -213,6 +213,9 @@ static void run_standalone(int argc, char* argv[]){
             LOG("[driver] OpenMP, number of threads for the Graphalytics suite: " << configuration().num_threads(ThreadsType::THREADS_READ));
             omp_set_num_threads(configuration().num_threads(ThreadsType::THREADS_READ));
         }
+#if HAVE_BWGRAPH
+        impl_ga.get()->set_worker_thread_num(configuration().num_threads(ThreadsType::THREADS_READ));
+#endif
 #endif
 
         // run the graphalytics suite
