@@ -758,24 +758,29 @@ updates in the pull direction to remove the need for atomics.
         unique_ptr<uint64_t[]> ptr_degrees{ new uint64_t[max_vertex_id]() }; // avoid memory leaks
         double* scores = ptr_scores.get();
         uint64_t* __restrict degrees = ptr_degrees.get();
+        auto graph = transaction.get_graph();
 
+#pragma omp parallel
+        {
+            uint8_t thread_ud = graph->get_openmp_worker_thread_id();
+#pragma omp for
+            for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                scores[v - 1] = init_score;
 
-#pragma omp parallel for
-        for(uint64_t v = 1; v <= max_vertex_id; v++){
-            scores[v] = init_score;
-
-            // compute the outdegree of the vertex
-            if(!transaction.get_vertex(v).empty()){ // check the vertex exists
-                uint64_t degree = 0;
-                auto iterator = transaction.simple_get_edges(v, /* label ? */ 1);
-                while(iterator.valid()){ degree++; //iterator.next();
+                // compute the outdegree of the vertex
+                if (!transaction.get_vertex(v).empty()) { // check the vertex exists
+                    uint64_t degree = 0;
+                    auto iterator = transaction.simple_get_edges(v, /* label ? */ 1,thread_ud);
+                    while (iterator.valid()) {
+                        degree++; //iterator.next();
+                    }
+                    degrees[v - 1] = degree;
+                } else {
+                    degrees[v - 1] = numeric_limits<uint64_t>::max();
                 }
-                degrees[v] = degree;
-            } else {
-                degrees[v] = numeric_limits<uint64_t>::max();
             }
         }
-
+        graph->on_openmp_section_finishing();
         gapbs::pvector<double> outgoing_contrib(max_vertex_id, 0.0);
 
         // pagerank iterations
@@ -786,13 +791,13 @@ updates in the pull direction to remove the need for atomics.
             // add its rank to the `dangling sum' (to be added to all nodes).
 #pragma omp parallel for reduction(+:dangling_sum)
             for(uint64_t v = 1; v <= max_vertex_id; v++){
-                uint64_t out_degree = degrees[v];
+                uint64_t out_degree = degrees[v-1];
                 if(out_degree == numeric_limits<uint64_t>::max()){
                     continue; // the vertex does not exist
                 } else if (out_degree == 0){ // this is a sink
-                    dangling_sum += scores[v];
+                    dangling_sum += scores[v-1];
                 } else {
-                    outgoing_contrib[v] = scores[v] / out_degree;
+                    outgoing_contrib[v-1] = scores[v-1] / out_degree;
                 }
             }
 
@@ -800,21 +805,28 @@ updates in the pull direction to remove the need for atomics.
 
             // compute the new score for each node in the graph
             //fixme: currently our txn does not support being executed by mutiple threads. It requires fetching thread_id for each operation execution from the table.
-#pragma omp parallel for schedule(dynamic, 64)
-            for(uint64_t v = 1; v <= max_vertex_id; v++){
-                if(degrees[v] == numeric_limits<uint64_t>::max()){ continue; } // the vertex does not exist
+//#pragma omp parallel for schedule(dynamic, 64)
+#pragma omp parallel
+            {
+                uint8_t thread_id = graph->get_openmp_worker_thread_id();
+#pragma omp for schedule(dynamic, 64)
+                for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                    if (degrees[v-1] == numeric_limits<uint64_t>::max()) { continue; } // the vertex does not exist
 
-                double incoming_total = 0;
-                auto iterator = transaction.simple_get_edges(v, /* label ? */ 1); // fixme: incoming edges for directed graphs
-                while(iterator.valid()){
-                    uint64_t u = iterator.dst_id();
-                    incoming_total += outgoing_contrib[u];
-                    //iterator.next();
+                    double incoming_total = 0;
+                    auto iterator = transaction.simple_get_edges(v, /* label ? */
+                                                                 1,thread_id); // fixme: incoming edges for directed graphs
+                    while (iterator.valid()) {
+                        uint64_t u = iterator.dst_id();
+                        incoming_total += outgoing_contrib[u-1];
+                        //iterator.next();
+                    }
+
+                    // update the score
+                    scores[v-1] = base_score + damping_factor * (incoming_total + dangling_sum);
                 }
-
-                // update the score
-                scores[v] = base_score + damping_factor * (incoming_total + dangling_sum);
             }
+            graph->on_openmp_section_finishing();
         }
 
         return ptr_scores;
