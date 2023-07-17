@@ -233,7 +233,7 @@ void Configuration::initialise(int argc, char* argv[]){
         }
 
         if( result["validate"].count() > 0 ){
-            m_validate_inserts = true;
+            //m_validate_inserts = true;
             m_validate_output = true;
 
             string path_validate_graph = result["validate"].as<string>();

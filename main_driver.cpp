@@ -214,6 +214,7 @@ static void run_standalone(int argc, char* argv[]){
             omp_set_num_threads(configuration().num_threads(ThreadsType::THREADS_READ));
         }
 #if HAVE_BWGRAPH
+        //no need to plus 1, main thread will participate in openmp
         impl_ga.get()->set_worker_thread_num(configuration().num_threads(ThreadsType::THREADS_READ));
 #endif
 #endif

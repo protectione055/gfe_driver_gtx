@@ -394,6 +394,13 @@ namespace gfe::library {
             } else {
                 output[logical_id-1] = make_pair(external_id, data[logical_id-1]);
             }
+            //fixme Libin for debug
+           /* if(external_id==208755){
+                std::cout<<external_id<<" "<<data[logical_id-1]<<std::endl;
+            }
+            if(external_id==287770){
+                std::cout<<external_id<<" "<<data[logical_id-1]<<std::endl;
+            }*/
         }
 
         return output;
@@ -487,47 +494,54 @@ namespace gfe::library {
     int64_t do_bfs_BUStep(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::Bitmap &front, gapbs::Bitmap &next) {
         int64_t awake_count = 0;
         next.reset();
+        auto graph = transaction.get_graph();
+//#pragma omp parallel for schedule(dynamic, 1024) reduction(+ : awake_count)
+#pragma omp parallel reduction(+ : awake_count)
+        {
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
+#pragma omp for schedule(dynamic, 1024)
+            for (uint64_t u = 1; u <= max_vertex_id; u++) {
+                if (distances[u - 1] == numeric_limits<int64_t>::max()) continue; // the vertex does not exist
+                COUT_DEBUG_BFS("explore: " << u << ", distance: " << distances[u]);
 
-#pragma omp parallel for schedule(dynamic, 1024) reduction(+ : awake_count)
-        for (uint64_t u = 1; u <= max_vertex_id; u++) {
-            if(distances[u-1] == numeric_limits<int64_t>::max()) continue; // the vertex does not exist
-            COUT_DEBUG_BFS("explore: " << u << ", distance: " << distances[u]);
+                if (distances[u - 1] < 0) { // the node has not been visited yet
+                    auto iterator = transaction.simple_get_edges(u, /* label */
+                                                                 1,thread_id); // fixme: incoming edges for directed graphs
 
-            if (distances[u-1] < 0){ // the node has not been visited yet
-                auto iterator = transaction.simple_get_edges(u, /* label */ 1); // fixme: incoming edges for directed graphs
+                    while (iterator.valid()) {
+                        uint64_t dst = iterator.dst_id();
+                        COUT_DEBUG_BFS("\tincoming edge: " << dst);
 
-                while(iterator.valid()){
-                    uint64_t dst = iterator.dst_id();
-                    COUT_DEBUG_BFS("\tincoming edge: " << dst);
+                        if (front.get_bit(dst - 1)) {
+                            COUT_DEBUG_BFS("\t-> distance updated to " << distance << " via vertex #" << dst);
+                            distances[u - 1] = distance; // on each BUStep, all nodes will have the same distance
+                            awake_count++;
+                            next.set_bit(u - 1);
+                            break;
+                        }
 
-                    if(front.get_bit(dst-1)) {
-                        COUT_DEBUG_BFS("\t-> distance updated to " << distance << " via vertex #" << dst);
-                        distances[u-1] = distance; // on each BUStep, all nodes will have the same distance
-                        awake_count++;
-                        next.set_bit(u-1);
-                        break;
+                        //iterator.next();
                     }
-
-                    //iterator.next();
                 }
             }
         }
-
+        graph->on_openmp_section_finishing();
         return awake_count;
     }
     static
     int64_t do_bfs_TDStep(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::SlidingQueue<int64_t>& queue) {
         int64_t scout_count = 0;
-
+        auto graph = transaction.get_graph();
 #pragma omp parallel reduction(+ : scout_count)
         {
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
             gapbs::QueueBuffer<int64_t> lqueue(queue);
 
 #pragma omp for schedule(dynamic, 64)
             for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
                 int64_t u = *q_iter;
                 COUT_DEBUG_BFS("explore: " << u);
-                auto iterator = transaction.simple_get_edges(u, /* label */ 1);
+                auto iterator = transaction.simple_get_edges(u, /* label */ 1, thread_id);
                 while(iterator.valid()){
                     uint64_t dst = iterator.dst_id();
                     COUT_DEBUG_BFS("\toutgoing edge: " << dst);
@@ -545,7 +559,7 @@ namespace gfe::library {
 
             lqueue.flush();
         }
-
+        graph->on_openmp_section_finishing();
         return scout_count;
     }
     static
@@ -574,23 +588,29 @@ namespace gfe::library {
     static
     unique_ptr<int64_t[]> do_bfs_init_distances(bg::SharedROTransaction& transaction, uint64_t max_vertex_id) {
         unique_ptr<int64_t[]> distances{ new int64_t[max_vertex_id] };
-#pragma omp parallel for
-        for (uint64_t n = 1; n <= max_vertex_id; n++){
-            if(transaction.get_vertex(n).empty()){ // the vertex does not exist
-                distances[n-1] = numeric_limits<int64_t>::max();
-            } else { // the vertex exists
-                // Retrieve the out degree for the vertex n
-                uint64_t out_degree = 0;
-                auto iterator = transaction.simple_get_edges(n, /* label */ 1);
-                while(iterator.valid()){
-                    out_degree++;
-                   // iterator.next();
-                }
+        //reset thread ID's
+        auto graph = transaction.get_graph();
+#pragma omp parallel
+        {
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
+#pragma omp for
+            for (uint64_t n = 1; n <= max_vertex_id; n++) {
+                if (transaction.get_vertex(n).empty()) { // the vertex does not exist
+                    distances[n - 1] = numeric_limits<int64_t>::max();
+                } else { // the vertex exists
+                    // Retrieve the out degree for the vertex n
+                    uint64_t out_degree = 0;
+                    auto iterator = transaction.simple_get_edges(n, /* label */ 1, thread_id);
+                    while (iterator.valid()) {
+                        out_degree++;
+                        // iterator.next();
+                    }
 
-                distances[n-1] = out_degree != 0 ? - out_degree : -1;
+                    distances[n - 1] = out_degree != 0 ? -out_degree : -1;
+                }
             }
         }
-
+        graph->on_openmp_section_finishing();
         return distances;
     }
 
@@ -600,7 +620,7 @@ namespace gfe::library {
         // Graphalytics only returns the distance
         unique_ptr<int64_t[]> ptr_distances = do_bfs_init_distances(transaction, max_vertex_id);
         int64_t* __restrict distances = ptr_distances.get();
-        distances[root] = 0;
+        distances[root-1] = 0;
 
         gapbs::SlidingQueue<int64_t> queue(max_vertex_id);
         queue.push_back(root);
@@ -651,6 +671,7 @@ namespace gfe::library {
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
         bg::SharedROTransaction transaction =  BwGraph->begin_shared_read_only_transaction();
+        BwGraph->on_openmp_txn_start(transaction.get_read_timestamp());
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
         uint64_t num_vertices = m_num_vertices;
         uint64_t num_edges = m_num_edges;
