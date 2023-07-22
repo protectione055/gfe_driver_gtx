@@ -522,6 +522,7 @@ namespace gfe::library {
 
                         //iterator.next();
                     }
+                    iterator.close();
                 }
             }
         }
@@ -555,6 +556,7 @@ namespace gfe::library {
 
                    // iterator.next();
                 }
+                iterator.close();
             }
 
             lqueue.flush();
@@ -605,7 +607,7 @@ namespace gfe::library {
                         out_degree++;
                         // iterator.next();
                     }
-
+                    iterator.close();
                     distances[n - 1] = out_degree != 0 ? -out_degree : -1;
                 }
             }
@@ -636,6 +638,7 @@ namespace gfe::library {
             auto iterator = transaction.simple_get_edges(root, 1);
             while(iterator.valid()){ scout_count++; //iterator.next();
              }
+            iterator.close();
         }
         int64_t distance = 1; // current distance
 
@@ -774,6 +777,7 @@ updates in the pull direction to remove the need for atomics.
                     while (iterator.valid()) {
                         degree++; //iterator.next();
                     }
+                    iterator.close();
                     degrees[v - 1] = degree;
                 } else {
                     degrees[v - 1] = numeric_limits<uint64_t>::max();
@@ -821,7 +825,7 @@ updates in the pull direction to remove the need for atomics.
                         incoming_total += outgoing_contrib[u-1];
                         //iterator.next();
                     }
-
+                    iterator.close();
                     // update the score
                     scores[v-1] = base_score + damping_factor * (incoming_total + dangling_sum);
                 }
@@ -969,6 +973,7 @@ more consistent performance for undirected graphs.
 
                     //iterator.next();
                 }
+                iterator.close();
             }
 
 #pragma omp parallel for schedule(dynamic, 64)
@@ -1050,7 +1055,7 @@ more consistent performance for undirected graphs.
                     histogram[labels0[u]]++;
                    // iterator.next();
                 }
-
+                iterator.close();
                 // get the max label
                 uint64_t label_max = numeric_limits<int64_t>::max();
                 uint64_t count_max = 0;
@@ -1075,6 +1080,7 @@ more consistent performance for undirected graphs.
             return ptr_labels1;
         }
     }
+    //todo:: fix iterator
     void BwGraphDriver::cdlp(uint64_t max_iterations, const char* dump2file) {
         if(m_is_directed) { ERROR("This implementation of the CDLP does not support directed graphs"); }
 
@@ -1127,6 +1133,7 @@ more consistent performance for undirected graphs.
                     auto iterator = transaction.simple_get_edges(v, 1);
                     while(iterator.valid()){ count ++; //iterator.next();
                     }
+                    iterator.close();
                     degrees_out[v] = count;
                 }
             }
@@ -1156,6 +1163,7 @@ more consistent performance for undirected graphs.
                     neighbours.insert(u);
                     iterator1.next();
                 }
+                iterator1.close();
             }
 
             // again, visit all neighbours of v
@@ -1180,9 +1188,10 @@ more consistent performance for undirected graphs.
 
                     iterator2.next();
                 }
-
+                iterator2.close();
                 iterator1.next();
             }
+            iterator1.close();
 
             // register the final score
             uint64_t max_num_edges = v_degree_out * (v_degree_out -1);
@@ -1303,6 +1312,7 @@ more consistent performance for undirected graphs.
 
                             //iterator.next();
                         }
+                        iterator.close();
                     }
                 }
 

@@ -29,7 +29,7 @@
 #include "details/build_thread.hpp"
 #include "configuration.hpp"
 #include "library/interface.hpp"
-
+#include "third-party/perfevent/PerfEvent.hpp"
 using namespace common;
 using namespace gfe::experiment::details;
 using namespace std;
@@ -72,7 +72,8 @@ void InsertOnly::execute_round_robin(){
     m_interface.get()->set_worker_thread_num(m_num_threads);
 #endif
     atomic<uint64_t> start_chunk_next = 0;
-
+   // PerfEvent e;
+   // e.startCounters();
     for(int64_t i = 0; i < m_num_threads; i++){
         threads.emplace_back([this, &start_chunk_next](int thread_id){
             concurrency::set_thread_name("Worker #" + to_string(thread_id));
@@ -96,6 +97,9 @@ void InsertOnly::execute_round_robin(){
 
     // wait for all threads to complete
     for(auto& t : threads) t.join();
+    //e.stopCounters();
+    //e.printReport(std::cout, m_num_threads); // use n as scale factor
+    //std::cout << std::endl;
 }
 void InsertOnly::execute_concurrent_by_timestamp() {
     LOG("Execute interleaving");
