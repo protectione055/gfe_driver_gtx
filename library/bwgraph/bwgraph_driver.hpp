@@ -36,10 +36,15 @@ namespace gfe::library {
 
         // Retrieve the internal vertex ID for the given internal vertex ID. If the vertex does not exist, it returns uint64_t::max()
         uint64_t int2ext(void* transaction, uint64_t internal_vertex_id) const;
+        // Retrieve the internal vertex ID for the given internal vertex ID. If the vertex does not exist, it returns uint64_t::max()
+        uint64_t int2ext_openmp(void* transaction, uint64_t internal_vertex_id,uint8_t thread_id) const;
 
         // Helper for Graphalytics: translate the logical IDs into external IDs
         template <typename T>
         std::vector<std::pair<uint64_t, T>> translate(void* /* transaction object */ lgtxn, const T* __restrict data, uint64_t data_sz);
+        // Helper for Graphalytics: translate the logical IDs into external IDs, assuming pure reads
+        template <typename T>
+        std::vector<std::pair<uint64_t, T>> static_translate(void* /* transaction object */ lgtxn, const T* __restrict data, uint64_t data_sz);
 
         // Helper, save the content of the vector to the given output file
         template <typename T, bool negative_scores = true>
@@ -50,7 +55,15 @@ namespace gfe::library {
 
         virtual void set_worker_thread_num(uint64_t new_num);
         virtual void on_edge_writes_finish();
+        virtual void finish_loading();
         virtual void thread_exit();
+        virtual void on_openmp_workloads_finish();
+        /**
+        * Libin adds: configure the library for mixed workload experiment
+        */
+        virtual void configure_distinct_reader_and_writer_threads(uint64_t reader_num, uint64_t writer_num);
+        virtual void mixed_workload_finish_loading();
+
         virtual ~BwGraphDriver();
 
         virtual uint64_t num_edges() const;
@@ -163,6 +176,7 @@ namespace gfe::library {
          * @param dump2file if not null, dump the result in the given path, following the format expected by the benchmark specification
          */
         virtual void sssp(uint64_t source_vertex_id, const char* dump2file = nullptr);
+
     };
 }//namspace
 

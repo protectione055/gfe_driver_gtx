@@ -152,6 +152,12 @@ public:
     virtual bool can_be_validated() const;
 
     virtual bool has_weights() const;
+
+    /**
+     * Libin adds: configure the library for mixed workload experiment
+     */
+     virtual void configure_distinct_reader_and_writer_threads(uint64_t reader_num, uint64_t writer_num){}
+     virtual void mixed_workload_finish_loading(){}
 };
 
 /**
@@ -275,6 +281,8 @@ public:
      * Libin add this for bwgraph
      */
     virtual void set_worker_thread_num(uint64_t new_num){}
+    virtual void finish_loading(){}
+    virtual void on_openmp_workloads_finish(){}
     /**
      * Perform a BFS from source_vertex_id to all the other vertices in the graph.
      * @param source_vertex_id the vertex where to start the search

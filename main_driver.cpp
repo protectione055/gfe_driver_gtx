@@ -132,7 +132,7 @@ static void run_standalone(int argc, char* argv[]){
               LOG("[driver] Number of write threads: " << configuration().num_threads(THREADS_WRITE));
               LOG("[driver] Number of read threads: " << configuration().num_threads(THREADS_READ));
               LOG("[driver] Aging2, path to the log of updates: " << configuration().get_update_log());
-
+              impl_upd->configure_distinct_reader_and_writer_threads(configuration().num_threads(THREADS_READ),configuration().num_threads(THREADS_WRITE));
               // Configure aging experiment
               Aging2Experiment agingExperiment;
               agingExperiment.set_library(impl_upd);
@@ -171,6 +171,9 @@ static void run_standalone(int argc, char* argv[]){
               LOG("[driver] Number of concurrent threads: " << configuration().num_threads(THREADS_WRITE));
               LOG("[driver] Aging2, path to the log of updates: " << configuration().get_update_log());
               Aging2Experiment experiment;
+#if HAVE_BWGRAPH
+                impl_upd->set_worker_thread_num(configuration().num_threads(THREADS_WRITE));
+#endif
               experiment.set_library(impl_upd);
               experiment.set_log(configuration().get_update_log());
               experiment.set_parallelism_degree(configuration().num_threads(THREADS_WRITE));
@@ -215,8 +218,11 @@ static void run_standalone(int argc, char* argv[]){
         }
 #if HAVE_BWGRAPH
         //no need to plus 1, main thread will participate in openmp
+        impl_ga.get()->finish_loading();
+        std::cout<<"bwgraph set reader threads"<<std::endl;
         impl_ga.get()->set_worker_thread_num(configuration().num_threads(ThreadsType::THREADS_READ));
-#endif
+        //impl_ga.get()->configure_distinct_reader_and_writer_threads(configuration().num_threads(ThreadsType::THREADS_READ),1);
+#endif //HAVE_BWGRAPH
 #endif
 
         // run the graphalytics suite

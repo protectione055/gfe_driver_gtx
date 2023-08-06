@@ -138,6 +138,14 @@ public:
      * @param save_in_db: if true store the results in the database
      */
     void report(bool save_in_db);
+    /**
+     * update interface finished loading, now prepare starting graphalytics
+     */
+    void mixed_workload_finished_loading();
+    /**
+     * mixed workload graphalytics part finish
+     */
+     void mixed_workload_read_finish();
 };
 
 

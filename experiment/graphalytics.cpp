@@ -143,6 +143,7 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
 
                 if(m_validate_output_enabled){
                     string path_reference = get_validation_path("BFS");
+                    //LOG("validation path is "<<path_reference);
                     if(common::filesystem::exists(path_reference)){
                         GraphalyticsValidate::bfs(path_tmp, path_reference, max_num_errors, get_validation_map());
                         LOG(">> Validation succeeded");
@@ -504,4 +505,11 @@ const std::unordered_map<uint64_t, uint64_t>* GraphalyticsSequential::get_valida
     }
 }
 
+void GraphalyticsSequential::mixed_workload_finished_loading() {
+    m_interface->mixed_workload_finish_loading();
+}
+
+void GraphalyticsSequential::mixed_workload_read_finish() {
+    m_interface->on_openmp_workloads_finish();
+}
 } // namespace experiment

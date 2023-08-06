@@ -71,6 +71,17 @@ namespace gfe::library {
     void BwGraphDriver::thread_exit(){
         BwGraph->thread_exit();
     }
+    void BwGraphDriver::on_openmp_workloads_finish() {
+        BwGraph->on_openmp_workloads_finish();
+    }
+    void BwGraphDriver::configure_distinct_reader_and_writer_threads(uint64_t reader_num, uint64_t writer_num) {
+        BwGraph->configure_distinct_readers_and_writers(reader_num,writer_num);
+    }
+
+    void BwGraphDriver::mixed_workload_finish_loading(){
+        BwGraph->on_finish_loading();
+    }
+
     bool BwGraphDriver::is_directed() const {
         return m_is_directed;
     }
@@ -95,6 +106,9 @@ namespace gfe::library {
         return m_pHashMap;
     }
 
+    void BwGraphDriver::finish_loading() {
+        BwGraph->whole_label_graph_eager_consolidation(1);
+    }
     uint64_t BwGraphDriver::ext2int(uint64_t external_vertex_id) const {
         vertex_dictionary_t::const_accessor accessor;
         if ( VertexDictionary->find(accessor, external_vertex_id ) ){
@@ -127,6 +141,15 @@ namespace gfe::library {
         }
     }
 
+    uint64_t BwGraphDriver::int2ext_openmp(void *opaque_transaction, uint64_t internal_vertex_id, uint8_t thread_id) const {
+        auto transaction = reinterpret_cast<bg::SharedROTransaction*>(opaque_transaction);
+        string_view payload = transaction->get_vertex(internal_vertex_id,thread_id);//they store external vid in the vertex data for experiments
+        if(payload.empty()){ // the vertex does not exist
+            return numeric_limits<uint64_t>::max();
+        } else {
+            return *(reinterpret_cast<const uint64_t*>(payload.data()));
+        }
+    }
     bool BwGraphDriver::add_vertex(uint64_t external_id) {
         vertex_dictionary_t::accessor accessor; // xlock
         bool inserted = VertexDictionary->insert(accessor, external_id);
@@ -383,28 +406,66 @@ namespace gfe::library {
     *                                                                           *
     *****************************************************************************/
     template <typename T>
-    vector<pair<uint64_t, T>> BwGraphDriver::translate(void* /* transaction object */ transaction, const T* __restrict data, uint64_t data_sz) {
-        assert(transaction != nullptr && "Transaction object not specified");
+    vector<pair<uint64_t, T>> BwGraphDriver::translate(void* /* transaction object */ opaque_transaction, const T* __restrict data, uint64_t data_sz) {
+        assert(opaque_transaction != nullptr && "Transaction object not specified");
         vector<pair<uint64_t, T>> output(data_sz);
-
-        for(uint64_t logical_id = 1; logical_id <= data_sz; logical_id++){
+        auto transaction = reinterpret_cast<bg::SharedROTransaction*>(opaque_transaction);
+       /* for(uint64_t logical_id = 1; logical_id <= data_sz; logical_id++){
             uint64_t external_id = int2ext(transaction, logical_id);
             if(external_id == numeric_limits<uint64_t>::max()) { // the vertex does not exist
                 output[logical_id-1] = make_pair(numeric_limits<uint64_t>::max(), numeric_limits<T>::max()); // special marker
             } else {
                 output[logical_id-1] = make_pair(external_id, data[logical_id-1]);
             }
-            //fixme Libin for debug
-           /* if(external_id==208755){
-                std::cout<<external_id<<" "<<data[logical_id-1]<<std::endl;
+        }*/
+        auto graph = transaction->get_graph();
+#pragma omp parallel
+        {
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
+#pragma omp for
+            for(uint64_t logical_id = 1; logical_id <= data_sz; logical_id++){
+                string_view payload = transaction->get_vertex(logical_id,thread_id);//they store external vid in the vertex data for experiments
+                if(payload.empty()){ // the vertex does not exist
+                    output[logical_id-1] = make_pair(numeric_limits<uint64_t>::max(), numeric_limits<T>::max());
+                } else {
+                    output[logical_id-1] = make_pair(*(reinterpret_cast<const uint64_t*>(payload.data())), data[logical_id-1]);
+                }
             }
-            if(external_id==287770){
-                std::cout<<external_id<<" "<<data[logical_id-1]<<std::endl;
-            }*/
+            transaction->thread_on_openmp_section_finish(thread_id);
         }
-
+        graph->on_openmp_section_finishing();
         return output;
     }
+
+    template<typename T>
+    std::vector<std::pair<uint64_t, T>>
+    BwGraphDriver::static_translate(void *opaque_transaction, const T *__restrict data, uint64_t data_sz) {
+        assert(opaque_transaction != nullptr && "Transaction object not specified");
+        vector<pair<uint64_t, T>> output(data_sz);
+        auto transaction = reinterpret_cast<bg::SharedROTransaction*>(opaque_transaction);
+        /* for(uint64_t logical_id = 1; logical_id <= data_sz; logical_id++){
+             uint64_t external_id = int2ext(transaction, logical_id);
+             if(external_id == numeric_limits<uint64_t>::max()) { // the vertex does not exist
+                 output[logical_id-1] = make_pair(numeric_limits<uint64_t>::max(), numeric_limits<T>::max()); // special marker
+             } else {
+                 output[logical_id-1] = make_pair(external_id, data[logical_id-1]);
+             }
+         }*/
+#pragma omp parallel
+        {
+#pragma omp for
+            for(uint64_t logical_id = 1; logical_id <= data_sz; logical_id++){
+                string_view payload = transaction->static_get_vertex(logical_id);//they store external vid in the vertex data for experiments
+                if(payload.empty()){ // the vertex does not exist
+                    output[logical_id-1] = make_pair(numeric_limits<uint64_t>::max(), numeric_limits<T>::max());
+                } else {
+                    output[logical_id-1] = make_pair(*(reinterpret_cast<const uint64_t*>(payload.data())), data[logical_id-1]);
+                }
+            }
+        }
+        return output;
+    }
+
     template <typename T, bool negative_scores>
     void BwGraphDriver::save_results(const vector<pair<uint64_t, T>>& result, const char* dump2file) {
         assert(dump2file != nullptr);
@@ -507,11 +568,12 @@ namespace gfe::library {
                 if (distances[u - 1] < 0) { // the node has not been visited yet
                     auto iterator = transaction.simple_get_edges(u, /* label */
                                                                  1,thread_id); // fixme: incoming edges for directed graphs
-
+                    //for debug:
+                    //uint64_t counter = 0;
                     while (iterator.valid()) {
                         uint64_t dst = iterator.dst_id();
                         COUT_DEBUG_BFS("\tincoming edge: " << dst);
-
+                        //counter++;
                         if (front.get_bit(dst - 1)) {
                             COUT_DEBUG_BFS("\t-> distance updated to " << distance << " via vertex #" << dst);
                             distances[u - 1] = distance; // on each BUStep, all nodes will have the same distance
@@ -525,8 +587,42 @@ namespace gfe::library {
                     iterator.close();
                 }
             }
+            transaction.thread_on_openmp_section_finish(thread_id);
         }
         graph->on_openmp_section_finishing();
+        return awake_count;
+    }
+    static
+    int64_t static_do_bfs_BUStep(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::Bitmap &front, gapbs::Bitmap &next) {
+        int64_t awake_count = 0;
+        next.reset();
+//#pragma omp parallel for schedule(dynamic, 1024) reduction(+ : awake_count)
+#pragma omp parallel reduction(+ : awake_count)
+        {
+#pragma omp for schedule(dynamic, 1024)
+            for (uint64_t u = 1; u <= max_vertex_id; u++) {
+                if (distances[u - 1] == numeric_limits<int64_t>::max()) continue; // the vertex does not exist
+                COUT_DEBUG_BFS("explore: " << u << ", distance: " << distances[u]);
+
+                if (distances[u - 1] < 0) { // the node has not been visited yet
+                    auto iterator = transaction.static_get_edges(u, /* label */
+                                                                 1); // fixme: incoming edges for directed graphs
+
+                    while (iterator.valid()) {
+                        uint64_t dst = iterator.dst_id();
+                        COUT_DEBUG_BFS("\tincoming edge: " << dst);
+
+                        if (front.get_bit(dst - 1)) {
+                            COUT_DEBUG_BFS("\t-> distance updated to " << distance << " via vertex #" << dst);
+                            distances[u - 1] = distance; // on each BUStep, all nodes will have the same distance
+                            awake_count++;
+                            next.set_bit(u - 1);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
         return awake_count;
     }
     static
@@ -536,6 +632,10 @@ namespace gfe::library {
 #pragma omp parallel reduction(+ : scout_count)
         {
             uint8_t thread_id = graph->get_openmp_worker_thread_id();
+          /*  if(thread_id>64){
+                std::cout<<static_cast<uint32_t>(thread_id)<<std::endl;
+                throw std::runtime_error("error, bad thread ID");
+            }*/
             gapbs::QueueBuffer<int64_t> lqueue(queue);
 
 #pragma omp for schedule(dynamic, 64)
@@ -560,8 +660,40 @@ namespace gfe::library {
             }
 
             lqueue.flush();
+            transaction.thread_on_openmp_section_finish(thread_id);
         }
         graph->on_openmp_section_finishing();
+        return scout_count;
+    }
+    static
+    int64_t static_do_bfs_TDStep(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::SlidingQueue<int64_t>& queue) {
+        int64_t scout_count = 0;
+#pragma omp parallel reduction(+ : scout_count)
+        {
+            gapbs::QueueBuffer<int64_t> lqueue(queue);
+
+#pragma omp for schedule(dynamic, 64)
+            for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
+                int64_t u = *q_iter;
+                COUT_DEBUG_BFS("explore: " << u);
+                auto iterator = transaction.static_get_edges(u, /* label */ 1);
+                while(iterator.valid()){
+                    uint64_t dst = iterator.dst_id();
+                    COUT_DEBUG_BFS("\toutgoing edge: " << dst);
+
+                    int64_t curr_val = distances[dst-1];
+                    if (curr_val < 0 && gapbs::compare_and_swap(distances[dst-1], curr_val, distance)) {
+                        COUT_DEBUG_BFS("\t-> distance updated to " << distance << " via vertex #" << dst);
+                        lqueue.push_back(dst);
+                        scout_count += -curr_val;
+                    }
+
+                    // iterator.next();
+                }
+            }
+
+            lqueue.flush();
+        }
         return scout_count;
     }
     static
@@ -592,12 +724,13 @@ namespace gfe::library {
         unique_ptr<int64_t[]> distances{ new int64_t[max_vertex_id] };
         //reset thread ID's
         auto graph = transaction.get_graph();
+        //graph->on_openmp_section_finishing();
 #pragma omp parallel
         {
             uint8_t thread_id = graph->get_openmp_worker_thread_id();
 #pragma omp for
             for (uint64_t n = 1; n <= max_vertex_id; n++) {
-                if (transaction.get_vertex(n).empty()) { // the vertex does not exist
+                if (transaction.get_vertex(n, thread_id).empty()) { // the vertex does not exist
                     distances[n - 1] = numeric_limits<int64_t>::max();
                 } else { // the vertex exists
                     // Retrieve the out degree for the vertex n
@@ -611,15 +744,41 @@ namespace gfe::library {
                     distances[n - 1] = out_degree != 0 ? -out_degree : -1;
                 }
             }
+            transaction.thread_on_openmp_section_finish(thread_id);
         }
         graph->on_openmp_section_finishing();
         return distances;
     }
+    static
+    unique_ptr<int64_t[]> static_do_bfs_init_distances(bg::SharedROTransaction& transaction, uint64_t max_vertex_id) {
+        unique_ptr<int64_t[]> distances{ new int64_t[max_vertex_id] };
 
+#pragma omp parallel
+        {
+#pragma omp for
+            for (uint64_t n = 1; n <= max_vertex_id; n++) {
+                //todo::add static get vertex
+                if (transaction.static_get_vertex(n).empty()) { // the vertex does not exist
+                    distances[n - 1] = numeric_limits<int64_t>::max();
+                } else { // the vertex exists
+                    // Retrieve the out degree for the vertex n
+                    uint64_t out_degree = 0;
+                    auto iterator = transaction.static_get_edges(n, /* label */ 1);
+                    while (iterator.valid()) {
+                        out_degree++;
+                        // iterator.next();
+                    }
+                    distances[n - 1] = out_degree != 0 ? -out_degree : -1;
+                }
+            }
+        }
+        return distances;
+    }
     static
     unique_ptr<int64_t[]> do_bfs(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t num_edges, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
         // The implementation from GAP BS reports the parent (which indeed it should make more sense), while the one required by
         // Graphalytics only returns the distance
+        //transaction.print_debug_info();
         unique_ptr<int64_t[]> ptr_distances = do_bfs_init_distances(transaction, max_vertex_id);
         int64_t* __restrict distances = ptr_distances.get();
         distances[root-1] = 0;
@@ -635,13 +794,15 @@ namespace gfe::library {
 
         int64_t scout_count = 0;
         { // retrieve the out degree of the root
-            auto iterator = transaction.simple_get_edges(root, 1);
+            auto graph = transaction.get_graph();
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.simple_get_edges(root, 1,thread_id);
             while(iterator.valid()){ scout_count++; //iterator.next();
              }
             iterator.close();
+            graph->on_openmp_section_finishing();
         }
         int64_t distance = 1; // current distance
-
         while (!timer.is_timeout() && !queue.empty()) {
 
             if (scout_count > edges_to_check / alpha) {
@@ -667,6 +828,57 @@ namespace gfe::library {
 
         return ptr_distances;
     }
+    static
+    unique_ptr<int64_t[]> static_do_bfs(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t num_edges, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
+        // The implementation from GAP BS reports the parent (which indeed it should make more sense), while the one required by
+        // Graphalytics only returns the distance
+        //transaction.print_debug_info();
+        unique_ptr<int64_t[]> ptr_distances = static_do_bfs_init_distances(transaction, max_vertex_id);
+        int64_t* __restrict distances = ptr_distances.get();
+        distances[root-1] = 0;
+
+        gapbs::SlidingQueue<int64_t> queue(max_vertex_id);
+        queue.push_back(root);
+        queue.slide_window();
+        gapbs::Bitmap curr(max_vertex_id);
+        curr.reset();
+        gapbs::Bitmap front(max_vertex_id);
+        front.reset();
+        int64_t edges_to_check = num_edges; //g.num_edges_directed();
+
+        int64_t scout_count = 0;
+        { // retrieve the out degree of the root
+            auto iterator = transaction.static_get_edges(root, 1);
+            while(iterator.valid()){ scout_count++; //iterator.next();
+            }
+        }
+        int64_t distance = 1; // current distance
+
+        while (!timer.is_timeout() && !queue.empty()) {
+
+            if (scout_count > edges_to_check / alpha) {
+                int64_t awake_count, old_awake_count;
+                do_bfs_QueueToBitmap(transaction, max_vertex_id, queue, front);
+                awake_count = queue.size();
+                queue.slide_window();
+                do {
+                    old_awake_count = awake_count;
+                    awake_count = static_do_bfs_BUStep(transaction, max_vertex_id, distances, distance, front, curr);
+                    front.swap(curr);
+                    distance++;
+                } while ((awake_count >= old_awake_count) || (awake_count > (int64_t) num_vertices / beta));
+                do_bfs_BitmapToQueue(transaction, max_vertex_id, front, queue);
+                scout_count = 1;
+            } else {
+                edges_to_check -= scout_count;
+                scout_count = static_do_bfs_TDStep(transaction, max_vertex_id, distances, distance, queue);
+                queue.slide_window();
+                distance++;
+            }
+        }
+
+        return ptr_distances;
+    }
     void BwGraphDriver::bfs(uint64_t external_source_id, const char* dump2file) {
         if(m_is_directed) { ERROR("This implementation of the BFS does not support directed graphs"); }
 
@@ -674,15 +886,19 @@ namespace gfe::library {
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
         bg::SharedROTransaction transaction =  BwGraph->begin_shared_read_only_transaction();
-        BwGraph->on_openmp_txn_start(transaction.get_read_timestamp());
+       // BwGraph->on_openmp_txn_start(transaction.get_read_timestamp());
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
         uint64_t num_vertices = m_num_vertices;
         uint64_t num_edges = m_num_edges;
+        //transaction.print_debug_info();
         uint64_t root = ext2int(external_source_id);
         COUT_DEBUG_BFS("root: " << root << " [external vertex: " << external_source_id << "]");
-
+        //Timer t;
+        //t.start();
         // Run the BFS algorithm
         unique_ptr<int64_t[]> ptr_result = do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
+        //unique_ptr<int64_t[]> ptr_result = static_do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
+        //cout << "BFS took " << t << endl;
         if(timeout.is_timeout()){
             transaction.commit(); // in bwgraph it is necessary
             RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);
@@ -690,11 +906,13 @@ namespace gfe::library {
 
         // translate the logical vertex IDs into the external vertex IDs
         auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
+        //auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
+        //cout << "Translation took " << t << endl;
         transaction.commit(); // not sure if strictly necessary
         if(timeout.is_timeout()){
             RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);
         }
-
+        //std::cout<<dump2file<<std::endl;
         if(dump2file != nullptr) // store the results in the given file
             save_results<int64_t, false>(external_ids, dump2file);
         std::cout<<"bfs over"<<std::endl;
@@ -771,7 +989,7 @@ updates in the pull direction to remove the need for atomics.
                 scores[v - 1] = init_score;
 
                 // compute the outdegree of the vertex
-                if (!transaction.get_vertex(v).empty()) { // check the vertex exists
+                if (!transaction.get_vertex(v, thread_ud).empty()) { // check the vertex exists
                     uint64_t degree = 0;
                     auto iterator = transaction.simple_get_edges(v, /* label ? */ 1,thread_ud);
                     while (iterator.valid()) {
@@ -835,7 +1053,89 @@ updates in the pull direction to remove the need for atomics.
 
         return ptr_scores;
     }
+    static
+    unique_ptr<double[]> do_static_pagerank(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t num_iterations, double damping_factor, utility::TimeoutService& timer) {
+        const double init_score = 1.0 / num_vertices;
+        const double base_score = (1.0 - damping_factor) / num_vertices;
 
+        unique_ptr<double[]> ptr_scores{ new double[max_vertex_id]() }; // avoid memory leaks
+        unique_ptr<uint64_t[]> ptr_degrees{ new uint64_t[max_vertex_id]() }; // avoid memory leaks
+        double* scores = ptr_scores.get();
+        uint64_t* __restrict degrees = ptr_degrees.get();
+        //auto graph = transaction.get_graph();
+
+#pragma omp parallel
+        {
+            //uint8_t thread_ud = graph->get_openmp_worker_thread_id();
+#pragma omp for
+            for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                scores[v - 1] = init_score;
+
+                // compute the outdegree of the vertex
+                if (!transaction.static_get_vertex(v).empty()) { // check the vertex exists
+                    uint64_t degree = 0;
+                    auto iterator = transaction.static_get_edges(v, /* label ? */ 1);
+                    while (iterator.valid()) {
+                        degree++; //iterator.next();
+                    }
+                    //iterator.close();
+                    degrees[v - 1] = degree;
+                } else {
+                    degrees[v - 1] = numeric_limits<uint64_t>::max();
+                }
+            }
+        }
+        //graph->on_openmp_section_finishing();
+        gapbs::pvector<double> outgoing_contrib(max_vertex_id, 0.0);
+
+        // pagerank iterations
+        for(uint64_t iteration = 0; iteration < num_iterations && !timer.is_timeout(); iteration++){
+            double dangling_sum = 0.0;
+
+            // for each node, precompute its contribution to all of its outgoing neighbours and, if it's a sink,
+            // add its rank to the `dangling sum' (to be added to all nodes).
+#pragma omp parallel for reduction(+:dangling_sum)
+            for(uint64_t v = 1; v <= max_vertex_id; v++){
+                uint64_t out_degree = degrees[v-1];
+                if(out_degree == numeric_limits<uint64_t>::max()){
+                    continue; // the vertex does not exist
+                } else if (out_degree == 0){ // this is a sink
+                    dangling_sum += scores[v-1];
+                } else {
+                    outgoing_contrib[v-1] = scores[v-1] / out_degree;
+                }
+            }
+
+            dangling_sum /= num_vertices;
+
+            // compute the new score for each node in the graph
+            //fixme: currently our txn does not support being executed by mutiple threads. It requires fetching thread_id for each operation execution from the table.
+//#pragma omp parallel for schedule(dynamic, 64)
+#pragma omp parallel
+            {
+                //uint8_t thread_id = graph->get_openmp_worker_thread_id();
+#pragma omp for schedule(dynamic, 64)
+                for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                    if (degrees[v-1] == numeric_limits<uint64_t>::max()) { continue; } // the vertex does not exist
+
+                    double incoming_total = 0;
+                    auto iterator = transaction.static_get_edges(v, /* label ? */
+                                                                 1); // fixme: incoming edges for directed graphs
+                    while (iterator.valid()) {
+                        uint64_t u = iterator.dst_id();
+                        incoming_total += outgoing_contrib[u-1];
+                        //iterator.next();
+                    }
+                    //iterator.close();
+                    // update the score
+                    scores[v-1] = base_score + damping_factor * (incoming_total + dangling_sum);
+                }
+            }
+            //graph->on_openmp_section_finishing();
+        }
+
+        return ptr_scores;
+    }
 
     void BwGraphDriver::pagerank(uint64_t num_iterations, double damping_factor, const char* dump2file) {
         if(m_is_directed) { ERROR("This implementation of PageRank does not support directed graphs"); }
@@ -849,10 +1149,12 @@ updates in the pull direction to remove the need for atomics.
 
         // Run the PageRank algorithm
         unique_ptr<double[]> ptr_result = do_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
+        //unique_ptr<double[]> ptr_result = do_static_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
         if(timeout.is_timeout()){ transaction.commit(); RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);  }
 
         // Retrieve the external node ids
         auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
+        //auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
         transaction.commit(); // read-only transaction, abort == commit
         if(timeout.is_timeout()){ RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
 
