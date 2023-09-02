@@ -71,6 +71,9 @@ class Aging2Worker {
     // load a batch of edges in the background thread
     void main_load_edges(uint64_t* edges, uint64_t num_edges);
 
+    // load a batch of edges in the background thread
+    void main_load_edges_even_split(uint64_t* edges, uint64_t num_edges);
+
     // execute the insert/delete operations for the graph in the background thread
     void main_execute_updates();
 
@@ -112,6 +115,8 @@ public:
     // Load a batch of edges
     void load_edges(uint64_t* edges, uint64_t num_edges);
 
+    void load_edge(uint64_t source, uint64_t destination, double weight);
+
     // Set the latency arrays for insertions and deletions
     void set_latencies(uint64_t* array_insertions, uint64_t* array_deletions);
 
@@ -140,6 +145,10 @@ public:
     uint64_t memory_footprint() const;
 
     bool is_in_library_code() const;
+
+    void print_workload(uint64_t start_entry, uint64_t num) const;
+
+    void clear_edges();
 };
 
 } // namespace

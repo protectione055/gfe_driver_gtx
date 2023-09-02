@@ -220,8 +220,8 @@ namespace gfe::library {
       tx.insert_vertex(internal_edge.src);
       tx.insert_vertex(internal_edge.dst);
 
-      tx.insert_edge({internal_edge.dst, internal_edge.src}, (char *) &e.m_weight, sizeof(e.m_weight));
       tx.insert_edge(internal_edge, (char *) &e.m_weight, sizeof(e.m_weight));
+      tx.insert_edge({internal_edge.dst, internal_edge.src}, (char *) &e.m_weight, sizeof(e.m_weight));//changed back to consistent insert order
 
       bool inserted = true;
       inserted &= tx.execute();
@@ -254,6 +254,74 @@ namespace gfe::library {
       return inserted;
     }
 
+    bool SortledtonDriver::add_edge_v3(gfe::graph::WeightedEdge e) {
+        assert(!m_is_directed);
+
+        thread_local optional <SnapshotTransaction> tx_o = nullopt;
+        edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
+
+//      bool insertion = true;
+//      if (tx_o.has_value()) {
+//        tm.getSnapshotTransaction(ds, false, *tx_o);
+//        auto tx = *tx_o;
+//
+//        bool exists = tx.has_edge(internal_edge);
+//        bool exists_reverse = tx.has_edge({internal_edge.dst, internal_edge.src});
+//        if (exists != exists_reverse) {
+//          cout << "Edge existed in only one direction" << endl;
+//        }
+//        if (exists) {
+//          insertion = false;
+//        }
+//        tm.transactionCompleted(tx);
+//      }
+
+        if (tx_o.has_value()) {
+            tm.getSnapshotTransaction(ds, true, *tx_o);
+        } else {
+            tx_o = tm.getSnapshotTransaction(ds, true);
+        }
+        auto tx = *tx_o;
+
+        tx.use_vertex_does_not_exists_semantics();
+
+        tx.insert_vertex(internal_edge.src);
+        tx.insert_vertex(internal_edge.dst);
+
+        tx.insert_or_update_edge(internal_edge, (char *) &e.m_weight, sizeof(e.m_weight));
+        tx.insert_or_update_edge({internal_edge.dst, internal_edge.src}, (char *) &e.m_weight, sizeof(e.m_weight));//changed back to consistent insert order
+
+        bool inserted = true;
+        inserted &= tx.execute();
+
+        tm.transactionCompleted(tx);
+
+//      tm.getSnapshotTransaction(ds, false, *tx_o);
+//      tx = *tx_o;
+//      double out;
+//      double out_reverse;
+//      bool exists = tx.get_weight(internal_edge, (char*) &out);
+//      bool exists_reverse = tx.get_weight({internal_edge.dst, internal_edge.src}, (char*) &out_reverse);
+//      if (!exists) {
+//        cout << "Forward edge does not exist." << endl;
+//      }
+//      if (!exists_reverse) {
+//        cout << "Backward edge does not exist." << endl;
+//      }
+//      if (out != out_reverse) {
+//        cout << "Edge sites have unequal weight: " << out << " " << out_reverse << endl;
+//        cout << "This was an insertion: " << insertion << endl;
+//        cout << "In neighbourhood: " << tx.neighbourhood_size(internal_edge.src) <<
+//        " " << tx.neighbourhood_size(internal_edge.dst) << endl;
+//      }
+//      if (out != e.m_weight) {
+//        cout << "Weight incorrect: " << e.m_weight << " " << out << endl;
+//        cout << "This was an insertion: " << insertion << endl;
+//      }
+//      tm.transactionCompleted(tx);
+        return inserted;
+    }
+
     bool SortledtonDriver::remove_edge(gfe::graph::Edge e) {
       assert(!m_is_directed);
 
@@ -267,8 +335,9 @@ namespace gfe::library {
 
       edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
 
-      tx.delete_edge({internal_edge.dst, internal_edge.src});
       tx.delete_edge(internal_edge);
+      tx.delete_edge({internal_edge.dst, internal_edge.src});
+
 
       bool removed = true;
       removed &= tx.execute();

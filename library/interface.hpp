@@ -202,6 +202,8 @@ public:
     virtual void on_edge_writes_finish(){}
     //libin for bwgraph: gracefully exit worker thread because of lazy updates
     virtual void thread_exit(){}
+    //lbin: print txn stats after a batch
+    virtual void print_and_clear_txn_stats(){}
     /**
      * Add the given vertex to the graph
      * @return true if the vertex has been inserted, false otherwise (that is, the vertex already exists)
@@ -229,6 +231,12 @@ public:
      * @return true if the edge has been inserted, false otherwise (e.g. this edge already exists)
      */
     virtual bool add_edge_v2(gfe::graph::WeightedEdge e) = 0;
+
+    /**
+     * Add OR update the given edge in the graph. Implicitly create the referred vertices if they do not already exist
+     * @return true if the edge has been inserted, false otherwise (e.g. this edge already exists)
+     */
+    virtual bool add_edge_v3(gfe::graph::WeightedEdge e) {}
 
     /**
      * Remove the given edge from the graph

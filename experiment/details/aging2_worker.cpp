@@ -188,6 +188,7 @@ void Aging2Worker::main_thread(){
             break;
         case TaskOp::LOAD_EDGES:
             main_load_edges(task.m_payload, task.m_payload_sz);
+            //main_load_edges_even_split(task.m_payload, task.m_payload_sz);
             break;
         case TaskOp::EXECUTE_UPDATES:
             main_execute_updates();
@@ -212,6 +213,7 @@ void Aging2Worker::main_thread(){
 
 void Aging2Worker::main_execute_updates(){
     // compute the amount of space used by the vectors in m_updates
+    //auto start = std::chrono::high_resolution_clock::now();
     for(uint64_t i = 0; i < m_updates.size(); i++){
         if(m_master.parameters().m_memfp_physical){ // physical space
             m_updates_mem_usage += m_updates[i]->size() * sizeof(gfe::graph::WeightedEdge);
@@ -276,11 +278,15 @@ void Aging2Worker::main_execute_updates(){
             m_updates.pop();
         }
     }
+    m_updates.clear();
     //for libin to understand
     //std::cout<<"worker "<<m_worker_id<<" finished updating edges"<<std::endl;
 #if HAVE_BWGRAPH
-    m_library->thread_exit();
+    //m_library->thread_exit();
 #endif
+   // auto stop = std::chrono::high_resolution_clock::now();
+   // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+   // std::cout<<"thread "<<m_worker_id<<" finishes workload in "<<duration.count()<<" us"<<std::endl;
 }
 
 
@@ -298,7 +304,8 @@ void Aging2Worker::main_load_edges(uint64_t* edges, uint64_t num_edges){
     uniform_real_distribution<double> rndweight{0, m_master.parameters().m_max_weight}; // in [0, max_weight)
 
     for(uint64_t i = 0; i < num_edges; i++){
-        if(static_cast<int>((sources[i] + destinations[i]) % modulo) == m_worker_id){
+       // if(static_cast<int>((sources[i] + destinations[i]) % modulo) == m_worker_id){
+        if(static_cast<int>(std::hash<uint64_t>()((sources[i] + destinations[i])) % modulo) == m_worker_id){
             if(last->size() > last_max_sz){
                 last = new vector<graph::WeightedEdge>();
                 m_updates.append(last);
@@ -324,6 +331,73 @@ void Aging2Worker::main_load_edges(uint64_t* edges, uint64_t num_edges){
     }
 }
 
+void Aging2Worker::load_edge(uint64_t source, uint64_t destination, double weight) {
+    if(m_updates.empty()){ m_updates.append(new vector<graph::WeightedEdge>()); }
+    vector<graph::WeightedEdge>* last = m_updates[m_updates.size() -1];
+
+    constexpr uint64_t last_max_sz = (1ull << 22); // 4M
+    const uint64_t modulo = m_master.parameters().m_num_threads;
+    uniform_real_distribution<double> rndweight{0, m_master.parameters().m_max_weight}; // in [0, max_weight)
+    if(last->size() > last_max_sz){
+        last = new vector<graph::WeightedEdge>();
+        m_updates.append(last);
+    }
+
+    if(weight >= 0){
+        m_num_edge_insertions++;
+    } else {
+        m_num_edge_deletions++;
+    }
+
+    // generate a random weight
+    if(weight == 0.0){
+        weight = rndweight(m_random); // in [0, max_weight)
+        if(weight == 0.0) weight = m_master.parameters().m_max_weight; // in (0, max_weight]
+    }
+
+
+    last->emplace_back(source, destination, weight);
+}
+
+void Aging2Worker::main_load_edges_even_split(uint64_t *edges, uint64_t num_edges) {
+    if(m_updates.empty()){ m_updates.append(new vector<graph::WeightedEdge>()); }
+    vector<graph::WeightedEdge>* last = m_updates[m_updates.size() -1];
+
+    constexpr uint64_t last_max_sz = (1ull << 22); // 4M
+    const uint64_t modulo = m_master.parameters().m_num_threads;
+
+    uint64_t* __restrict sources = edges;
+    uint64_t* __restrict destinations = sources + num_edges;
+    double* __restrict weights = reinterpret_cast<double*>(destinations + num_edges);
+
+    uniform_real_distribution<double> rndweight{0, m_master.parameters().m_max_weight}; // in [0, max_weight)
+
+    for(uint64_t i = 0; i < num_edges; i++){
+        if(i%modulo == m_worker_id){
+            if(last->size() > last_max_sz){
+                last = new vector<graph::WeightedEdge>();
+                m_updates.append(last);
+            }
+
+            // counters
+            double weight = weights[i];
+            if(weight >= 0){
+                m_num_edge_insertions++;
+            } else {
+                m_num_edge_deletions++;
+            }
+
+            // generate a random weight
+            if(weight == 0.0){
+                weight = rndweight(m_random); // in [0, max_weight)
+                if(weight == 0.0) weight = m_master.parameters().m_max_weight; // in (0, max_weight]
+            }
+
+
+            last->emplace_back(sources[i], destinations[i], weight);
+        }
+    }
+}
 void Aging2Worker::main_remove_vertices(uint64_t* vertices, uint64_t num_vertices){
     auto pardegree = m_master.parameters().m_num_threads;
     m_is_in_library_code = true;
@@ -449,4 +523,39 @@ bool Aging2Worker::is_in_library_code() const {
   return m_is_in_library_code;
 }
 
+void Aging2Worker::print_workload(uint64_t start_entry, uint64_t num) const {
+   /* uint64_t start_entry_copy = start_entry;
+    std::cout<<"has "<<m_updates.size()<<" vectors"<<std::endl;
+    for(uint64_t i = 0, end = m_updates.size(); i < end; i++){
+        vector<graph::WeightedEdge>* operations = m_updates[i];
+        auto per_vector_size = operations->size();
+        if(per_vector_size<start_entry_copy){
+            start_entry_copy-=per_vector_size;
+            continue;
+        }else{
+            for(uint64_t j = 0; j<num; j++){
+                if(j+start_entry_copy>=per_vector_size){
+                    operations = m_updates[i+1];
+                    for(uint64_t z=0; z<num-1-j; z++ ){
+                        std::cout<<operations->at(z).edge().source()<<" "<<operations->at(z).destination()<<" "<<operations->at(z).m_weight<<std::endl;
+                    }
+                    return;
+                }else{
+                    std::cout<<operations->at(j+start_entry_copy).edge().source()<<" "<<operations->at(j+start_entry_copy).destination()<<" "<<operations->at(j+start_entry_copy).m_weight<<std::endl;
+                }
+            }
+            return;
+        }
+    }*/
+   uint64_t total_size = 0;
+    for(uint64_t i = 0, end = m_updates.size(); i < end; i++){
+        total_size+=m_updates[i]->size();
+    }
+    std::cout<<"worker "<<m_worker_id;
+    std::cout<<" has "<<total_size<<" operations"<<std::endl;
+}
+
+void Aging2Worker::clear_edges() {
+
+}
 } // namespace

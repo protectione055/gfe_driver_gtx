@@ -30,7 +30,7 @@
 namespace gfe::experiment { class Aging2Experiment; }
 namespace gfe::experiment::details { class Aging2Worker; }
 namespace gfe::experiment::details { class LatencyStatistics; }
-
+namespace gfe::reader::graphlog {class EdgeLoader;}
 namespace gfe::experiment::details {
 
 class Aging2Master {
@@ -61,11 +61,18 @@ class Aging2Master {
 
     std::atomic_bool m_experiment_running = false;
 
+    uint64_t total_time_seconds = 0;
+   // uint64_t read_log_num = 0;
+   // uint64_t total_log_num = 2603795200;//for graph500's 10 hour log
+
     // Initialise the set of workers
     void init_workers();
 
     // Load & partition the edges to insert/remove in the available workers
     void load_edges();
+
+    // Load & partition the percent of total edges to insert/remove in the available workers
+    void load_edges_percent( reader::graphlog::EdgeLoader* loader,uint64_t* array1,uint64_t* array2, uint64_t& total_workload_size, uint64_t& read_operations_num, uint64_t synchronization_ratio, uint64_t array_size);
 
     // Prepare the array to record the latency of all updates
     void prepare_latencies();
@@ -119,6 +126,11 @@ public:
     const Aging2Experiment& parameters() const { return m_parameters; }
 
     double progress_so_far() const;
+
+    Aging2Result execute_synchronized(uint64_t synchronization_point = 10);
+    Aging2Result execute_synchronized_evenly_partition(uint64_t synchronization_point = 10);
+    Aging2Result execute_synchronized_small_batch();
+    Aging2Result execute_synchronized_small_batch_even_partition();
 };
 
 }

@@ -82,6 +82,10 @@ namespace gfe::library {
         BwGraph->on_finish_loading();
     }
 
+    void BwGraphDriver::print_and_clear_txn_stats() {
+        BwGraph->print_and_clear_txn_stats();
+    }
+
     bool BwGraphDriver::is_directed() const {
         return m_is_directed;
     }
@@ -231,6 +235,94 @@ namespace gfe::library {
     }
 
     bool BwGraphDriver::add_edge_v2(gfe::graph::WeightedEdge edge){
+        uint64_t internal_source_id = numeric_limits<uint64_t>::max();
+        uint64_t internal_destination_id = 0;
+        bool insert_source = false;
+        bool insert_destination = false;
+        vertex_dictionary_t::const_accessor slock1, slock2;
+        vertex_dictionary_t::accessor xlock1, xlock2;
+        bool result = false;
+        if(VertexDictionary->find(slock1, edge.m_source)){ // insert the vertex e.m_source
+            internal_source_id = slock1->second;
+        } else {
+            slock1.release();
+            if ( VertexDictionary->insert(xlock1, edge.m_source) ) {
+                insert_source = true;
+            } else {
+                internal_source_id = xlock1->second;
+            }
+        }
+
+        if(VertexDictionary->find(slock2, edge.m_destination)){ // insert the vertex e.m_destination
+            internal_destination_id = slock2->second;
+        } else {
+            slock2.release();
+            if( VertexDictionary->insert(xlock2, edge.m_destination) ) {
+                insert_destination = true;
+            } else {
+                internal_destination_id = xlock2->second;
+            }
+        }
+
+        bool done = false;
+        do {
+            auto tx = BwGraph->begin_read_write_transaction();
+            try {
+                // create the vertices in BwGraph
+                if(insert_source){
+                    internal_source_id = tx.new_vertex();
+                    string_view data { (char*) &edge.m_source, sizeof(edge.m_source) };
+                    tx.put_vertex(internal_source_id, data);
+                }
+                if(insert_destination){
+                    internal_destination_id = tx.new_vertex();
+                    string_view data { (char*) &edge.m_destination, sizeof(edge.m_destination) };
+                    tx.put_vertex(internal_destination_id, data);
+                }
+
+                // insert the edge
+                string_view weight { (char*) &edge.m_weight, sizeof(edge.m_weight) };
+                //string weight = "weight";//todo:: change this back
+                //tx.put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
+                result = tx.checked_put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
+
+                if(!m_is_directed&&result){
+                    // a) In directed graphs, we register the incoming edges with label 1
+                    // b) In undirected graphs, we follow the same convention given by G. Feng, author
+                    // of the LiveGraph paper, for his experiments in the LDBC SNB Person knows Person:
+                    // undirected edges are added twice as a -> b and b -> a
+                    //bg::label_t label = 1;
+                    //tx.put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
+                    result&=tx.checked_put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
+                }
+                if(tx.commit()){
+                    if(result)
+                        m_num_edges++;
+                    done = true;
+                }
+            } catch (bg::RollbackExcept& e){
+                tx.abort();
+                // retry ...
+            }
+        } while(!done);
+
+        if(insert_source){
+            assert(internal_source_id != numeric_limits<uint64_t>::max());
+            xlock1->second = internal_source_id;
+            m_num_vertices++;
+        }
+        if(insert_destination){
+            assert(internal_destination_id != numeric_limits<uint64_t>::max());
+            xlock2->second = internal_destination_id;
+            m_num_vertices++;
+        }
+
+        return result;
+    }
+/*
+ * bwgraph version is the same as v2
+ */
+    bool BwGraphDriver::add_edge_v3(gfe::graph::WeightedEdge edge){
         uint64_t internal_source_id = numeric_limits<uint64_t>::max();
         uint64_t internal_destination_id = 0;
         bool insert_source = false;

@@ -58,6 +58,8 @@ namespace gfe::library {
         virtual void finish_loading();
         virtual void thread_exit();
         virtual void on_openmp_workloads_finish();
+        //debug information
+        virtual void print_and_clear_txn_stats();
         /**
         * Libin adds: configure the library for mixed workload experiment
         */
@@ -115,6 +117,13 @@ namespace gfe::library {
     * @return always true.
     */
         virtual bool add_edge_v2(gfe::graph::WeightedEdge e);
+        /**
+         * asme as v2 for bwgraph
+         * @param e
+         * @return
+         */
+        virtual bool add_edge_v3(gfe::graph::WeightedEdge e);
+
 
         /**
          * Remove the given edge from the graph
