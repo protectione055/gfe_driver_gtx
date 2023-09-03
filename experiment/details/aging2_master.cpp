@@ -24,6 +24,7 @@
 #include <mutex>
 #include <thread>
 #include <utility>
+#include <unordered_set>
 
 #include "common/error.hpp"
 #include "common/quantity.hpp"
@@ -63,6 +64,18 @@ extern mutex _log_mutex [[maybe_unused]];
  *                                                                           *
  *****************************************************************************/
 namespace gfe::experiment::details {
+    //https://www.geeksforgeeks.org/how-to-create-an-unordered_map-of-pairs-in-c/
+    struct hash_edge {
+        size_t operator()(const pair <uint64_t, uint64_t> &p) const {
+            auto hash1 = std::hash<uint64_t>()(p.first);
+            auto hash2 = std::hash<uint64_t>()(p.second);
+            if (hash1 != hash2)[[likely]] {
+                return hash1 ^ hash2;
+            }
+            // If hash1 == hash2, their XOR is zero.
+            return hash1;
+        }
+    };
 
     Aging2Master::Aging2Master(const Aging2Experiment &parameters) :
             m_parameters(parameters),
@@ -268,7 +281,7 @@ namespace gfe::experiment::details {
 #endif
      //   LOG("[Aging2] Experiment completed!");
      //   LOG("[Aging2] Updates performed with " << parameters().m_num_threads << " threads in " << timer);
-        total_time_seconds+=timer.seconds();
+        total_time_microseconds+=timer.microseconds();
         cooloff(start_time);
         m_results.m_completion_time = timer.microseconds();
         m_results.m_num_build_invocations = build_service.num_invocations();
@@ -599,18 +612,7 @@ namespace gfe::experiment::details {
         return m_results;
     }
 
-    //https://www.geeksforgeeks.org/how-to-create-an-unordered_map-of-pairs-in-c/
-    struct hash_edge {
-        size_t operator()(const pair <uint64_t, uint64_t> &p) const {
-            auto hash1 = std::hash<uint64_t>()(p.first);
-            auto hash2 = std::hash<uint64_t>()(p.second);
-            if (hash1 != hash2)[[likely]] {
-                return hash1 ^ hash2;
-            }
-            // If hash1 == hash2, their XOR is zero.
-            return hash1;
-        }
-    };
+
 
     Aging2Result Aging2Master::execute_synchronized_evenly_partition(uint64_t synchronization_point) {
         uint64_t num_workers = m_workers.size();
@@ -755,7 +757,7 @@ namespace gfe::experiment::details {
         //log_num_vtx_edges();
 
         handle.close();
-        LOG("total execution time is "<<total_time_seconds);
+        LOG("total execution time is "<<total_time_microseconds<<" us");
         return m_results;
     }
 
@@ -840,7 +842,59 @@ namespace gfe::experiment::details {
         //log_num_vtx_edges();
 
         handle.close();
-        LOG("total execution time is "<<total_time_seconds);
+        LOG("total execution time is "<<total_time_microseconds);
+        return m_results;
+    }
+
+    Aging2Result Aging2Master::execute_pure_update_small_batch() {
+        m_workload_index.store(0,std::memory_order_release);
+        fstream handle(m_parameters.m_path_log, ios_base::in | ios_base::binary);
+        auto properties = reader::graphlog::parse_properties(handle);
+        uint64_t array_sz = stoull(properties["internal.edges.block_size"]);
+        reader::graphlog::set_marker(properties, handle, reader::graphlog::Section::EDGES);
+        reader::graphlog::EdgeLoader loader(handle);
+        uint64_t num_edges = 0;
+        //bool print = false;
+        unique_ptr<uint64_t[]> ptr_array1{new uint64_t[array_sz]};
+        unique_ptr<uint64_t[]> ptr_array2{new uint64_t[array_sz]};
+        uint64_t *array1 = ptr_array1.get();
+        uint64_t *array2 = ptr_array2.get();
+        num_edges = loader.load(array1, array_sz / 3);
+        std::unordered_set<std::pair<uint64_t,uint64_t>,hash_edge>seen_edges;
+        //do a simple test
+    /*    for(uint64_t j=0; j<num_edges; j++){
+            auto result = seen_edges.emplace(array1[j],(array1+num_edges)[j]);
+            if(!result.second)
+            LOG(array1[j]<<" "<<(array1+num_edges)[j]<<" "<< (reinterpret_cast<double*>(array1+2*num_edges))[j]);
+            //LOG(array1[j]<<" "<<(array1+num_edges)[j]<<" "<< (reinterpret_cast<double*>(array1+2*num_edges))[j]);
+        }*/
+        while (num_edges > 0) {
+            if (parameters().m_measure_latency) prepare_latencies();
+           // LOG("execute edge updates of batch size " << num_edges);
+            //do experiment
+            Timer timer;
+            timer.start();
+            for (auto w: m_workers) w->execute_true_updates(array1,num_edges);
+            m_experiment_running = true;
+            wait_and_record();
+            timer.stop();
+            total_time_microseconds+= timer.microseconds();
+           // LOG("batch finished in "<<timer.seconds()<<" seconds");
+            m_experiment_running = false;
+            // change to insert-like batch execution
+            //if (m_results.m_random_vertex_id == 0) { set_random_vertex_id(array1, num_edges); }
+            // load the next batch in the meanwhile
+            num_edges = loader.load(array2, array_sz / 3);
+            //std::cout<<num_edges<<std::endl;
+            // wait for the workers to complete
+            //for (auto w: m_workers) w->wait();
+            //for (auto w: m_workers) w->print_workload(0,num_edges);
+            swap(array1, array2);
+
+            m_workload_index.store(0,std::memory_order_release);
+            //do_run_experiment();
+        }
+        LOG("total update time is "<<total_time_microseconds<<" us");
         return m_results;
     }
 } // namespace

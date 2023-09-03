@@ -139,6 +139,7 @@ Aging2Result Aging2Experiment::execute(){
     //auto result = m_master->execute();
     //auto result = m_master->execute_synchronized(5);
     auto result = m_master->execute_synchronized_small_batch();
+    //auto result = m_master->execute_pure_update_small_batch();
     //auto result = m_master->execute_synchronized_small_batch_even_partition();
     //auto result = m_master->execute_synchronized_evenly_partition(5);
     // Master should be deleted here to ensure the same thread that called the constructor it also calls the destructor

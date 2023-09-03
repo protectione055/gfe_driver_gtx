@@ -47,11 +47,12 @@ class Aging2Worker {
     uint64_t m_num_edge_insertions {0}; // counter, total number of edge insertions to perform, as contained in the array m_updates
     uint64_t* m_latency_deletions {nullptr};
     uint64_t m_num_edge_deletions {0}; // counter, total number of edge deletions to perform, as contained in the array m_updates
+    uint64_t m_update_batch_granularity= 16;
     std::atomic<uint64_t> m_num_operations = 0; // counter, total number of operations performed so far
 
     std::atomic<bool> m_is_in_library_code = false;
 
-    enum class TaskOp { IDLE, START, STOP, LOAD_EDGES, EXECUTE_UPDATES, REMOVE_VERTICES, SET_ARRAY_LATENCIES };
+    enum class TaskOp { IDLE, START, STOP, LOAD_EDGES, EXECUTE_UPDATES, REMOVE_VERTICES, SET_ARRAY_LATENCIES, EXECUTE_TRUE_UPDATES };
     struct Task { TaskOp m_type; uint64_t* m_payload; uint64_t m_payload_sz; };
     Task m_task; // current task being executed
 
@@ -76,6 +77,8 @@ class Aging2Worker {
 
     // execute the insert/delete operations for the graph in the background thread
     void main_execute_updates();
+
+    void main_execute_true_updates(uint64_t* edges, uint64_t num_edges);
 
     // remote the artificial vertices, those that do not belong to the final graph, in the background thread
     void main_remove_vertices(uint64_t* vertices, uint64_t num_vertices);
@@ -117,6 +120,8 @@ public:
 
     void load_edge(uint64_t source, uint64_t destination, double weight);
 
+    void execute_true_updates(uint64_t* edges, uint64_t num_edges);
+
     // Set the latency arrays for insertions and deletions
     void set_latencies(uint64_t* array_insertions, uint64_t* array_deletions);
 
@@ -149,6 +154,7 @@ public:
     void print_workload(uint64_t start_entry, uint64_t num) const;
 
     void clear_edges();
+
 };
 
 } // namespace

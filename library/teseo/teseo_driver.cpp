@@ -164,16 +164,30 @@ bool TeseoDriver::add_edge(gfe::graph::WeightedEdge e) {
     auto tx = TESEO->start_transaction();
     try {
         tx.insert_edge(e.source(), e.destination(), e.weight());
+        //std::cout<<"reach commit"<<std::endl;
         tx.commit();
         return true;
     } catch( LogicalError& e ){
+        //std::cout<<"logical error"<<std::endl;
+        //std::cerr << e.what()<<std::endl;
         return false;
     } catch( TransactionConflict& e) {
+        //std::cout<<"txn conflict"<<std::endl;
         return false;
     }
 }
 
 bool TeseoDriver::add_edge_v2(gfe::graph::WeightedEdge e){
+    static cuckoohash_map<uint64_t, bool> vertices;
+
+    if(vertices.insert(e.source(), true)){ add_vertex(e.source()); }
+    if(vertices.insert(e.destination(), true)){ add_vertex(e.destination()); }
+    while( ! add_edge(e) ) { /* nop */ }
+
+    return true;
+}
+
+bool TeseoDriver::add_edge_v3(gfe::graph::WeightedEdge e) {
     static cuckoohash_map<uint64_t, bool> vertices;
 
     if(vertices.insert(e.source(), true)){ add_vertex(e.source()); }

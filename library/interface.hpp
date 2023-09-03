@@ -236,7 +236,7 @@ public:
      * Add OR update the given edge in the graph. Implicitly create the referred vertices if they do not already exist
      * @return true if the edge has been inserted, false otherwise (e.g. this edge already exists)
      */
-    virtual bool add_edge_v3(gfe::graph::WeightedEdge e) {}
+    virtual bool add_edge_v3(gfe::graph::WeightedEdge e) {return true;}
 
     /**
      * Remove the given edge from the graph

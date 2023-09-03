@@ -61,7 +61,7 @@ class Aging2Master {
 
     std::atomic_bool m_experiment_running = false;
 
-    uint64_t total_time_seconds = 0;
+    uint64_t total_time_microseconds = 0;
    // uint64_t read_log_num = 0;
    // uint64_t total_log_num = 2603795200;//for graph500's 10 hour log
 
@@ -131,6 +131,8 @@ public:
     Aging2Result execute_synchronized_evenly_partition(uint64_t synchronization_point = 10);
     Aging2Result execute_synchronized_small_batch();
     Aging2Result execute_synchronized_small_batch_even_partition();
+    Aging2Result execute_pure_update_small_batch();
+    std::atomic_uint64_t m_workload_index;
 };
 
 }

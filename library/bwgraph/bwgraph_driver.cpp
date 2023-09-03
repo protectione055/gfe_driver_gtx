@@ -405,7 +405,7 @@ namespace gfe::library {
             m_num_vertices++;
         }
 
-        return result;
+        return true;
     }
 
     bool BwGraphDriver::remove_edge(gfe::graph::Edge e){
