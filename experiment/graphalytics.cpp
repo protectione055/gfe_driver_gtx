@@ -131,14 +131,14 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
     for(uint64_t i = 0; i < m_num_repetitions; i++){
 
         if(m_properties.bfs.m_enabled){
-            LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": BFS from source vertex: " << m_properties.bfs.m_source_vertex);
+            //LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": BFS from source vertex: " << m_properties.bfs.m_source_vertex);
             string path_tmp = get_temporary_path("bfs", i);
             const char* path_result = m_validate_output_enabled ? path_tmp.c_str() : nullptr;
             try {
                 t_local.start();
                 interface->bfs(m_properties.bfs.m_source_vertex, path_result);
                 t_local.stop();
-                LOG(">> BFS Execution time: " << t_local);
+               // LOG(">> BFS Execution time: " << t_local);
                 m_exec_bfs.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){

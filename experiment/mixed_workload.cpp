@@ -52,4 +52,7 @@ namespace gfe::experiment {
       return MixedWorkloadResult { aging_result, m_graphalytics };
     }
 
+    void MixedWorkload::report_graphalytics() {
+        m_graphalytics.report(false);
+    }
 }

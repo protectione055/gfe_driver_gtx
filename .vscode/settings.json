@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "chrono": "cpp",
-        "new": "cpp"
-    }
+        "new": "cpp",
+        "regex": "cpp"
+    },
+    "cmake.sourceDirectory": "/home/zhou822/gfe_driver_bigdata/third-party/googletest"
 }

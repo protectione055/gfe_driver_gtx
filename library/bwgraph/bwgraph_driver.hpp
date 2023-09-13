@@ -124,7 +124,7 @@ namespace gfe::library {
          */
         virtual bool add_edge_v3(gfe::graph::WeightedEdge e);
 
-
+        virtual bool update_edge_v1(gfe::graph::WeightedEdge e);
         /**
          * Remove the given edge from the graph
          * @return true if the given edge has been removed, false otherwise (e.g. this edge does not exist)

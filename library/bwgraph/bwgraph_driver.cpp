@@ -408,6 +408,104 @@ namespace gfe::library {
         return true;
     }
 
+    /*
+     * lookup the edge, and then insert/update
+     */
+    bool BwGraphDriver::update_edge_v1(gfe::graph::WeightedEdge edge) {
+        uint64_t internal_source_id = numeric_limits<uint64_t>::max();
+        uint64_t internal_destination_id = 0;
+        bool insert_source = false;
+        bool insert_destination = false;
+        vertex_dictionary_t::const_accessor slock1, slock2;
+        vertex_dictionary_t::accessor xlock1, xlock2;
+        bool result = false;
+        if(VertexDictionary->find(slock1, edge.m_source)){ // insert the vertex e.m_source
+            internal_source_id = slock1->second;
+        } else {
+            slock1.release();
+            if ( VertexDictionary->insert(xlock1, edge.m_source) ) {
+                insert_source = true;
+            } else {
+                internal_source_id = xlock1->second;
+            }
+        }
+
+        if(VertexDictionary->find(slock2, edge.m_destination)){ // insert the vertex e.m_destination
+            internal_destination_id = slock2->second;
+        } else {
+            slock2.release();
+            if( VertexDictionary->insert(xlock2, edge.m_destination) ) {
+                insert_destination = true;
+            } else {
+                internal_destination_id = xlock2->second;
+            }
+        }
+
+        bool done = false;
+        bool need_check = true;
+        do {
+            auto tx = BwGraph->begin_read_write_transaction();
+            double update_weight = edge.m_weight;
+            try {
+                // create the vertices in BwGraph
+                if(insert_source){
+                    internal_source_id = tx.new_vertex();
+                    string_view data { (char*) &edge.m_source, sizeof(edge.m_source) };
+                    tx.put_vertex(internal_source_id, data);
+                    need_check= false;
+                }
+                if(insert_destination){
+                    internal_destination_id = tx.new_vertex();
+                    string_view data { (char*) &edge.m_destination, sizeof(edge.m_destination) };
+                    tx.put_vertex(internal_destination_id, data);
+                    need_check= false;
+                }
+                if(need_check){
+                    std::string_view read_result = tx.get_edge(internal_source_id,internal_destination_id,1);
+                    if(!read_result.empty()){
+                        double w = *reinterpret_cast<const double*>(read_result.data());
+                        update_weight+= w;
+                    }
+                }
+                // insert the edge
+                string_view weight { (char*) &update_weight, sizeof(update_weight) };
+                //string weight = "weight";//todo:: change this back
+                //tx.put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
+                result = tx.checked_put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
+
+                if(!m_is_directed&&result){
+                    // a) In directed graphs, we register the incoming edges with label 1
+                    // b) In undirected graphs, we follow the same convention given by G. Feng, author
+                    // of the LiveGraph paper, for his experiments in the LDBC SNB Person knows Person:
+                    // undirected edges are added twice as a -> b and b -> a
+                    //bg::label_t label = 1;
+                    //tx.put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
+                    result&=tx.checked_put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
+                }
+                if(tx.commit()){
+                    if(result)
+                        m_num_edges++;
+                    done = true;
+                }
+            } catch (bg::RollbackExcept& e){
+                tx.abort();
+                // retry ...
+            }
+        } while(!done);
+
+        if(insert_source){
+            assert(internal_source_id != numeric_limits<uint64_t>::max());
+            xlock1->second = internal_source_id;
+            m_num_vertices++;
+        }
+        if(insert_destination){
+            assert(internal_destination_id != numeric_limits<uint64_t>::max());
+            xlock2->second = internal_destination_id;
+            m_num_vertices++;
+        }
+        return true;
+    }
+
     bool BwGraphDriver::remove_edge(gfe::graph::Edge e){
         vertex_dictionary_t::const_accessor slock1, slock2;
         if(!VertexDictionary->find(slock1, e.source())){ return false; }
@@ -1007,7 +1105,7 @@ namespace gfe::library {
         //std::cout<<dump2file<<std::endl;
         if(dump2file != nullptr) // store the results in the given file
             save_results<int64_t, false>(external_ids, dump2file);
-        std::cout<<"bfs over"<<std::endl;
+        //std::cout<<"bfs over"<<std::endl;
     }
 /*****************************************************************************
  *                                                                           *
@@ -1093,6 +1191,7 @@ updates in the pull direction to remove the need for atomics.
                     degrees[v - 1] = numeric_limits<uint64_t>::max();
                 }
             }
+            transaction.thread_on_openmp_section_finish(thread_ud);
         }
         graph->on_openmp_section_finishing();
         gapbs::pvector<double> outgoing_contrib(max_vertex_id, 0.0);
@@ -1139,6 +1238,7 @@ updates in the pull direction to remove the need for atomics.
                     // update the score
                     scores[v-1] = base_score + damping_factor * (incoming_total + dangling_sum);
                 }
+                transaction.thread_on_openmp_section_finish(thread_id);
             }
             graph->on_openmp_section_finishing();
         }
@@ -1656,16 +1756,17 @@ more consistent performance for undirected graphs.
     static
     gapbs::pvector<WeightT> do_sssp(bg::SharedROTransaction& transaction, uint64_t num_edges, uint64_t max_vertex_id, uint64_t source, double delta, utility::TimeoutService& timer) {
         // Init
-        gapbs::pvector<WeightT> dist(max_vertex_id+1, numeric_limits<WeightT>::infinity());
-        dist[source] = 0;
+        gapbs::pvector<WeightT> dist(max_vertex_id, numeric_limits<WeightT>::infinity());
+        dist[source-1] = 0;
         gapbs::pvector<NodeID> frontier(num_edges);
         // two element arrays for double buffering curr=iter&1, next=(iter+1)&1
         size_t shared_indexes[2] = {0, kMaxBin};
         size_t frontier_tails[2] = {1, 0};
         frontier[0] = source;
-
+         auto graph = transaction.get_graph();
 #pragma omp parallel
         {
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
             vector<vector<NodeID> > local_bins(0);
             size_t iter = 0;
 
@@ -1677,19 +1778,19 @@ more consistent performance for undirected graphs.
 #pragma omp for nowait schedule(dynamic, 64)
                 for (size_t i=0; i < curr_frontier_tail; i++) {
                     NodeID u = frontier[i];
-                    if (dist[u] >= delta * static_cast<WeightT>(curr_bin_index)) {
-                        auto iterator = transaction.simple_get_edges(u, /* label */ 1);
+                    if (dist[u-1] >= delta * static_cast<WeightT>(curr_bin_index)) {
+                        auto iterator = transaction.simple_get_edges(u, /* label */ 1,thread_id);
                         while(iterator.valid()){
                             uint64_t v = iterator.dst_id();
                             string_view payload = iterator.edge_delta_data();
                             double w = *reinterpret_cast<const double*>(payload.data());
 
-                            WeightT old_dist = dist[v];
-                            WeightT new_dist = dist[u] + w;
+                            WeightT old_dist = dist[v-1];
+                            WeightT new_dist = dist[u-1] + w;
                             if (new_dist < old_dist) {
                                 bool changed_dist = true;
-                                while (!gapbs::compare_and_swap(dist[v], old_dist, new_dist)) {
-                                    old_dist = dist[v];
+                                while (!gapbs::compare_and_swap(dist[v-1], old_dist, new_dist)) {
+                                    old_dist = dist[v-1];
                                     if (old_dist <= new_dist) {
                                         changed_dist = false;
                                         break;
@@ -1739,7 +1840,9 @@ more consistent performance for undirected graphs.
             #pragma omp single
         COUT_DEBUG("took " << iter << " iterations");
 #endif
+            transaction.thread_on_openmp_section_finish(thread_id);
         }
+        graph->on_openmp_section_finishing();
 
         return dist;
     }

@@ -239,6 +239,12 @@ public:
     virtual bool add_edge_v3(gfe::graph::WeightedEdge e) {return true;}
 
     /**
+     * Libin: for each edge, read its current weight. If the current weight exist, add e's weight with current weight and update the edge weight
+     * otherwise insert e as the new edge.
+    */
+    virtual bool update_edge_v1(gfe::graph::WeightedEdge e){return true;}
+
+    /**
      * Remove the given edge from the graph
      * @return true if the given edge has been removed, false otherwise (e.g. this edge does not exist)
      */

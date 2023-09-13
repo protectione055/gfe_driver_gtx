@@ -257,15 +257,15 @@ namespace gfe::experiment::details {
                 uint64_t num_ops_done = m_master.m_num_operations_performed.fetch_add(end - start);
 
                 // report progress
-                if (report_progress &&
-                    static_cast<int>(100.0 * num_ops_done / num_total_ops) > m_master.m_last_progress_reported) {
+              /*  if (report_progress &&
+                    static_cast<int>(100.0 * num_ops_done / num_total_ops) > m_master.m_last_progress_reported){
                     m_master.m_last_progress_reported = 100.0 * num_ops_done / num_total_ops;
                     if (!m_master.m_stop_experiment) {
                         LOG("[thread: " << ::common::concurrency::get_thread_id() << ", worker_id: " << m_worker_id
                                         << "] Progress: " << static_cast<int>(100.0 * num_ops_done / num_total_ops)
                                         << "%");
                     }
-                }
+                }*/
 
                 // report how long it took to perform 1x, 2x, ... updates w.r.t. to the size of the final graph
                 int aging_coeff =
@@ -361,13 +361,24 @@ namespace gfe::experiment::details {
         while((start_index = m_master.m_workload_index.fetch_add(m_update_batch_granularity))<num_edges){
             uint64_t end = std::min<uint64_t>(start_index+m_update_batch_granularity,num_edges);
             //LOG("Thread "<<m_worker_id<<" insert "<<start_index<<" "<<end);
+            /*
+             * change it that: first get weight, then insert with this new weight
+             */
             for(uint64_t i= start_index; i<end; i++){
+               /* double new_weight = weights[i];
+                double current_weight = m_library->get_weight(sources[i],destinations[i]);
+                if(current_weight!=numeric_limits<double>::signaling_NaN()){
+                    new_weight+=current_weight;
+                }*/
+                m_library->update_edge_v1(graph::WeightedEdge(sources[i],destinations[i],weights[i]));
+               // m_library->add_edge_v3(graph::WeightedEdge(sources[i],destinations[i],weights[i]));
                // LOG("Thread "<<m_worker_id<<" insert "<<sources[i]<<" "<<destinations[i]);
-                while (!m_library->add_edge_v3(graph::WeightedEdge(sources[i],destinations[i],weights[i]))) { /* nop */ };
-                //LOG("Worker "<<m_worker_id<<" 1 egde");
+                //while (!m_library->add_edge_v3(graph::WeightedEdge(sources[i],destinations[i],weights[i]))) { /* nop */ };
+                //while (!m_library->update_edge_v1(graph::WeightedEdge(sources[i],destinations[i],weights[i]))) { /* nop */ };
+
             }
         }
-        //LOG("Worker "<<m_worker_id<<" finished in this batch");
+        LOG("Worker "<<m_worker_id<<" finished in this batch");
     }
     void Aging2Worker::load_edge(uint64_t source, uint64_t destination, double weight) {
         if (m_updates.empty()) { m_updates.append(new vector<graph::WeightedEdge>()); }

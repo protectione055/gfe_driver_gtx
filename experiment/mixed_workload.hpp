@@ -13,6 +13,7 @@ namespace gfe::experiment {
           : m_aging_experiment(aging_experiment), m_graphalytics(graphalytics), m_read_threads(read_threads) {}
 
         MixedWorkloadResult execute();
+        void report_graphalytics();
     private:
         Aging2Experiment& m_aging_experiment;
         GraphalyticsSequential& m_graphalytics;

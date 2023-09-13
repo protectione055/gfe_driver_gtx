@@ -120,8 +120,8 @@ namespace gfe::experiment::details {
         m_workers.reserve(parameters().m_num_threads);
         //sortledton:version
         //for(uint64_t worker_id = 1; worker_id < parameters().m_num_threads; worker_id++){
-#if HAVE_BWGRAPH
-        for(uint64_t worker_id = 0; worker_id < parameters().m_num_threads; worker_id++){
+#if HAVE_SORTLEDTON
+        for(uint64_t worker_id = 1; worker_id < parameters().m_num_threads; worker_id++){
 #else
         for (uint64_t worker_id = 0; worker_id < parameters().m_num_threads; worker_id++) {
 #endif
@@ -729,7 +729,14 @@ namespace gfe::experiment::details {
             }
         }*/
         //we manually calculated it, load 16 batches
+#if HAVE_LIVEGRAPH
+        uint64_t executed_operations = 0;
+        uint64_t total_log = 2603795200;
+#endif
         while (num_edges > 0) {
+#if HAVE_LIVEGRAPH
+            executed_operations+=num_edges;
+#endif
             // partition the batch among the workers
             for (auto w: m_workers) w->load_edges(array1, num_edges);
             if (m_results.m_random_vertex_id == 0) { set_random_vertex_id(array1, num_edges); }
@@ -743,6 +750,11 @@ namespace gfe::experiment::details {
             swap(array1, array2);
             if (parameters().m_measure_latency) prepare_latencies();
             do_run_experiment();
+#if HAVE_LIVEGRAPH
+            if(executed_operations>(2603795200/5)){
+                break;
+            }
+#endif
         }
         /*if(print){
             for(uint64_t x=0; x<39; x++){
@@ -757,6 +769,9 @@ namespace gfe::experiment::details {
         //log_num_vtx_edges();
 
         handle.close();
+#if HAVE_LIVEGRAPH
+            LOG("LiveGraph executed "<<executed_operations<<" operations");
+#endif
         LOG("total execution time is "<<total_time_microseconds<<" us");
         return m_results;
     }
@@ -868,9 +883,16 @@ namespace gfe::experiment::details {
             LOG(array1[j]<<" "<<(array1+num_edges)[j]<<" "<< (reinterpret_cast<double*>(array1+2*num_edges))[j]);
             //LOG(array1[j]<<" "<<(array1+num_edges)[j]<<" "<< (reinterpret_cast<double*>(array1+2*num_edges))[j]);
         }*/
+        uint64_t loop = 0;
+#if HAVE_LIVEGRAPH
+        uint64_t executed_operations = 0;
+        uint64_t total_log = 2603795200;
+#endif
         while (num_edges > 0) {
+            loop++;
             if (parameters().m_measure_latency) prepare_latencies();
-           // LOG("execute edge updates of batch size " << num_edges);
+
+            LOG(loop<<"th iteration execute edge updates of batch size " << num_edges);
             //do experiment
             Timer timer;
             timer.start();
