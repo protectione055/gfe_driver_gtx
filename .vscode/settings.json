@@ -2,7 +2,23 @@
     "files.associations": {
         "chrono": "cpp",
         "new": "cpp",
-        "regex": "cpp"
+        "regex": "cpp",
+        "ostream": "cpp",
+        "array": "cpp",
+        "deque": "cpp",
+        "forward_list": "cpp",
+        "list": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "vector": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp",
+        "random": "cpp",
+        "limits": "cpp",
+        "semaphore": "cpp",
+        "valarray": "cpp",
+        "algorithm": "cpp"
     },
     "cmake.sourceDirectory": "/home/zhou822/gfe_driver_bigdata/third-party/googletest"
 }

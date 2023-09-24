@@ -219,7 +219,7 @@ static void run_standalone(int argc, char* argv[]){
         }
 #if HAVE_BWGRAPH
         //no need to plus 1, main thread will participate in openmp
-        //impl_ga.get()->finish_loading();
+        impl_ga.get()->finish_loading();
         std::cout<<"bwgraph set reader threads"<<std::endl;
         impl_ga.get()->set_worker_thread_num(configuration().num_threads(ThreadsType::THREADS_READ));
         //impl_ga.get()->configure_distinct_reader_and_writer_threads(configuration().num_threads(ThreadsType::THREADS_READ),1);

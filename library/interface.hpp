@@ -158,6 +158,7 @@ public:
      */
      virtual void configure_distinct_reader_and_writer_threads(uint64_t reader_num, uint64_t writer_num){}
      virtual void mixed_workload_finish_loading(){}
+     virtual void analytical_workload_end(){}
 };
 
 /**

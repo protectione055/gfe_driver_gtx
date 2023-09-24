@@ -60,6 +60,7 @@ namespace gfe::library {
         virtual void on_openmp_workloads_finish();
         //debug information
         virtual void print_and_clear_txn_stats();
+        virtual void analytical_workload_end();
         /**
         * Libin adds: configure the library for mixed workload experiment
         */

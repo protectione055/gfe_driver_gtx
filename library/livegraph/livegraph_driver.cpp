@@ -966,9 +966,41 @@ unique_ptr<uint64_t[]> do_wcc(lg::Transaction& transaction, uint64_t max_vertex_
 
     return ptr_components;
 }
-
+static void do_weight_scan(lg::Transaction& transaction, uint64_t max_vertex_id){
+    uint64_t total_edge_num = 0;
+    uint64_t total_vid_sum = 0;
+    double total_weight = 0;
+#pragma omp parallel
+        {
+        uint64_t local_degree = 0;
+        uint64_t  local_vid = 0;
+        double local_weight =0;
+#pragma omp for
+        for(uint64_t v=0; v<max_vertex_id;v++){
+            auto iterator = transaction.get_edges(v, /* label ? */ 0); // fixme: incoming edges for directed graphs
+            while(iterator.valid()){
+                uint64_t u = iterator.dst_id();
+                local_degree++;
+                local_vid+=u;
+                string_view payload = iterator.edge_data();
+                double w = *reinterpret_cast<const double*>(payload.data());
+                local_weight += w;
+                iterator.next();
+            }
+        }
+#pragma omp critical
+        {
+                total_edge_num += local_degree;
+                total_vid_sum += local_vid;
+                total_weight+=local_weight;
+        }
+    }
+    std::cout<<"total edge degree is "<<total_edge_num<<std::endl;
+    std::cout<<"total vid sum is "<<total_vid_sum<<std::endl;
+    std::cout<<"total edge weights are "<<total_weight<<std::endl;
+}
 void LiveGraphDriver::wcc(const char* dump2file) {
-    utility::TimeoutService timeout { m_timeout };
+    /*utility::TimeoutService timeout { m_timeout };
     Timer timer; timer.start();
     auto transaction = m_read_only ? LiveGraph->begin_read_only_transaction() : LiveGraph->begin_transaction();
     uint64_t max_vertex_id = LiveGraph->get_max_vertex_id();
@@ -984,8 +1016,40 @@ void LiveGraphDriver::wcc(const char* dump2file) {
 
     // store the results in the given file
     if(dump2file != nullptr)
-        save_results(external_ids, dump2file);
+        save_results(external_ids, dump2file);*/
+    auto transaction = m_read_only ? LiveGraph->begin_read_only_transaction() : LiveGraph->begin_transaction();
+    uint64_t max_vertex_id = LiveGraph->get_max_vertex_id();
+    do_weight_scan(transaction,max_vertex_id);
 }
+
+
+static void do_topology_scan(lg::Transaction& transaction, uint64_t max_vertex_id){
+    uint64_t total_edge_num = 0;
+    uint64_t total_vid_sum = 0;
+#pragma omp parallel
+        {
+        uint64_t local_degree = 0;
+        uint64_t  local_vid = 0;
+#pragma omp for
+        for(uint64_t v=0; v<max_vertex_id;v++){
+            auto iterator = transaction.get_edges(v, /* label ? */ 0); // fixme: incoming edges for directed graphs
+            while(iterator.valid()){
+                uint64_t u = iterator.dst_id();
+                local_degree++;
+                local_vid+=u;
+                iterator.next();
+            }
+        }
+#pragma omp critical
+        {
+                total_edge_num += local_degree;
+                total_vid_sum += local_vid;
+        }
+    }
+    std::cout<<"total edge degree is "<<total_edge_num<<std::endl;
+    std::cout<<"total vid sum is "<<total_vid_sum<<std::endl;
+}
+
 
 /*****************************************************************************
  *                                                                           *
@@ -1058,7 +1122,7 @@ unique_ptr<uint64_t[]> do_cdlp(lg::Transaction& transaction, uint64_t max_vertex
 }
 
 void LiveGraphDriver::cdlp(uint64_t max_iterations, const char* dump2file) {
-    if(m_is_directed) { ERROR("This implementation of the CDLP does not support directed graphs"); }
+    /*if(m_is_directed) { ERROR("This implementation of the CDLP does not support directed graphs"); }
 
     utility::TimeoutService timeout { m_timeout };
     Timer timer; timer.start();
@@ -1076,7 +1140,10 @@ void LiveGraphDriver::cdlp(uint64_t max_iterations, const char* dump2file) {
 
     // Store the results in the given file
     if(dump2file != nullptr)
-        save_results(external_ids, dump2file);
+        save_results(external_ids, dump2file);*/
+    auto transaction = m_read_only ?  LiveGraph->begin_read_only_transaction() : LiveGraph->begin_transaction();
+    uint64_t max_vertex_id = LiveGraph->get_max_vertex_id();
+    do_topology_scan(transaction,max_vertex_id);
 }
 
 /*****************************************************************************

@@ -212,6 +212,11 @@ namespace gfe::library {
         virtual void sssp(uint64_t source_vertex_id, const char *dump2file = nullptr);
 
         virtual bool can_be_validated() const;
+
+        //libin add this
+        void do_topology_scan();
+        
+        void do_weight_scan();
     };
 
 }

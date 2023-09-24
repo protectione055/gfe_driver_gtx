@@ -891,8 +891,10 @@ namespace gfe::experiment::details {
         while (num_edges > 0) {
             loop++;
             if (parameters().m_measure_latency) prepare_latencies();
-
-            LOG(loop<<"th iteration execute edge updates of batch size " << num_edges);
+            for(uint64_t j=100; j<150; j++){
+                LOG(array1[j]<<" "<<(array1+num_edges)[j]<<" "<< (reinterpret_cast<double*>(array1+2*num_edges))[j]);
+            }
+            //LOG(loop<<"th iteration execute edge updates of batch size " << num_edges);
             //do experiment
             Timer timer;
             timer.start();

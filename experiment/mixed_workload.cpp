@@ -40,10 +40,16 @@ namespace gfe::experiment {
                     }
 #endif
 
+#if HAVE_LIVEGRAPH
+      while (m_aging_experiment.progress_so_far() < 0.16 && aging_result_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        m_graphalytics.execute();
+      }
+#else
       while (m_aging_experiment.progress_so_far() < 0.9 && aging_result_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
         m_graphalytics.execute();
       }
-        m_graphalytics.mixed_workload_read_finish();
+#endif
+      m_graphalytics.mixed_workload_read_finish();
       cout << "Waiting for aging experiment to finish" << endl;
       aging_result_future.wait();
       cout << "Getting aging experiment results" << endl;

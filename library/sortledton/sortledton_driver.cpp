@@ -24,6 +24,7 @@
 #include "algorithms/GAPBSAlgorithms.h"
 #include "data-structure/EdgeDoesNotExistsPrecondition.h"
 #include "data-structure/VersionedBlockedEdgeIterator.h"
+#include "data-structure/VersionedBlockedPropertyEdgeIterator.h"
 
 using namespace gapbs;
 using namespace common;
@@ -256,8 +257,8 @@ namespace gfe::library {
     bool SortledtonDriver::add_edge_v3(gfe::graph::WeightedEdge e) {
         assert(!m_is_directed);
 
-        thread_local optional <SnapshotTransaction> tx_o = nullopt;
-        edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
+      thread_local optional <SnapshotTransaction> tx_o = nullopt;
+      edge_t internal_edge{static_cast<dst_t>(e.source()), static_cast<dst_t>(e.destination())};
 
 //      bool insertion = true;
 //      if (tx_o.has_value()) {
@@ -275,25 +276,24 @@ namespace gfe::library {
 //        tm.transactionCompleted(tx);
 //      }
 
-        if (tx_o.has_value()) {
-            tm.getSnapshotTransaction(ds, true, *tx_o);
-        } else {
-            tx_o = tm.getSnapshotTransaction(ds, true);
-        }
-        auto tx = *tx_o;
+      if (tx_o.has_value()) {
+        tm.getSnapshotTransaction(ds, true, *tx_o);
+      } else {
+        tx_o = tm.getSnapshotTransaction(ds, true);
+      }
+      auto tx = *tx_o;
 
-        tx.use_vertex_does_not_exists_semantics();
+      tx.use_vertex_does_not_exists_semantics();
 
-        tx.insert_vertex(internal_edge.src);
-        tx.insert_vertex(internal_edge.dst);
+      tx.insert_vertex(internal_edge.src);
+      tx.insert_vertex(internal_edge.dst);
 
-        tx.insert_or_update_edge({internal_edge.dst, internal_edge.src}, (char *) &e.m_weight, sizeof(e.m_weight));
-        tx.insert_or_update_edge(internal_edge, (char *) &e.m_weight, sizeof(e.m_weight));
+      tx.insert_or_update_edge(internal_edge, (char *) &e.m_weight, sizeof(e.m_weight));
+      tx.insert_or_update_edge({internal_edge.dst, internal_edge.src}, (char *) &e.m_weight, sizeof(e.m_weight));//changed back to consistent insert order
 
-        bool inserted = true;
-        inserted &= tx.execute();
+      tx.execute();
 
-        tm.transactionCompleted(tx);
+      tm.transactionCompleted(tx);
 
 //      tm.getSnapshotTransaction(ds, false, *tx_o);
 //      tx = *tx_o;
@@ -318,7 +318,7 @@ namespace gfe::library {
 //        cout << "This was an insertion: " << insertion << endl;
 //      }
 //      tm.transactionCompleted(tx);
-        return inserted;
+      return true;
     }
 
     bool SortledtonDriver::update_edge_v1(gfe::graph::WeightedEdge e) {
@@ -519,7 +519,7 @@ namespace gfe::library {
 
     void SortledtonDriver::wcc(const char *dump2file) {
       tm.register_thread(0);
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
+      /*SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
       run_gc();
 
@@ -531,13 +531,60 @@ namespace gfe::library {
 
       if (dump2file != nullptr) {
         save_result<uint64_t>(external_ids, dump2file);
-      }
+      }*/
+      do_weight_scan();
       tm.deregister_thread(0);
+    }
+    void SortledtonDriver::do_topology_scan(){
+      SortledtonDriver *non_const_this = const_cast<SortledtonDriver *>(this);
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, false);
+      const uint64_t max_physical_vertices = ds->max_physical_vertex();
+      uint64_t total_num_edges = 0;
+      uint64_t total_vid_sum=0;
+        /*if (!tx.has_vertex(source) || !tx.has_vertex(destination)) {
+            return nan("");
+        }
+        weight_t w;
+        auto has_edge = tx.get_weight({static_cast<dst_t>(source), static_cast<dst_t>(destination)}, (char *) &w);*/
+#pragma omp parallel
+        {
+            uint64_t local_edge_num = 0;
+            uint64_t  local_vid_sum = 0;
+#pragma omp for
+        for (uint64_t v = 0; v < max_physical_vertices; v++) {
+            VersionedBlockedEdgeIterator _iter = tx.neighbourhood_blocked_p(v);
+            while(_iter.has_next_block()){
+              auto [_versioned, _bs, _be] = _iter.next_block();
+              if(_versioned){
+                while (_iter.has_next_edge()) {
+                    auto dst = _iter.next();                
+                    local_vid_sum+=dst;
+                    local_edge_num++;
+                }          
+              }else{
+                for (auto _i = _bs; _i < _be; _i++) {
+                  auto dst = *_i;
+                  local_vid_sum+=dst;
+                  local_edge_num++;
+                }
+              } 
+            }
+         }
+#pragma omp critical
+{
+                total_num_edges += local_edge_num;
+                total_vid_sum += local_vid_sum;
+}
+      }
+        //VersionedBlockedEdgeIterator _iter = tx.neighbourhood_blocked_p(src);
+        non_const_this->tm.transactionCompleted(tx);
+        std::cout<<"total edge number is "<<total_num_edges<<std::endl;
+        std::cout<<"total vids sum is "<<total_vid_sum<<std::endl;
     }
 
     void SortledtonDriver::cdlp(uint64_t max_iterations, const char *dump2file) {
       tm.register_thread(0);
-      SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
+    /*SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
       run_gc();
 
@@ -548,7 +595,9 @@ namespace gfe::library {
 
       if (dump2file != nullptr) {
         save_result<uint64_t>(external_ids, dump2file);
-      }
+      }*/
+      //run_gc();
+      do_topology_scan();
       tm.deregister_thread(0);
     }
 
@@ -816,5 +865,54 @@ namespace gfe::library {
       }
       tm.deregister_thread(0);
     }
+  void SortledtonDriver::do_weight_scan(){
+      SortledtonDriver *non_const_this = const_cast<SortledtonDriver *>(this);
+      SnapshotTransaction tx = non_const_this->tm.getSnapshotTransaction(ds, false);
+      const uint64_t max_physical_vertices = ds->max_physical_vertex();
+      uint64_t total_num_edges = 0;
+      uint64_t total_vid_sum=0;
+      double total_weight = 0;
+      #pragma omp parallel
+        {
+            uint64_t local_edge_num = 0;
+            uint64_t  local_vid_sum = 0;
+            double local_weight = 0;
+#pragma omp for
+        for (uint64_t v = 0; v < max_physical_vertices; v++) {
 
+           VersionedBlockedPropertyEdgeIterator _iter = tx.neighbourhood_with_properties_blocked_p(v);
+            while(_iter.has_next_block()){
+              auto [_versioned, _bs, _be, _ws, _we] = _iter.next_block_with_properties();
+              if (_versioned) {
+                while (_iter.has_next_edge()) { 
+                  auto [edge_name, properties_name] = _iter.next_with_properties(); 
+                  local_edge_num++;
+                  local_vid_sum+=edge_name;
+                  local_weight+=properties_name; 
+                }
+              }else{
+                auto _p = _ws;
+                for (auto _i = _bs; _i < _be; _i++) {
+                  auto edge_name = *_i;
+                  auto properties_name = *_p;
+                  _p++;
+                  local_edge_num++;
+                  local_vid_sum+=edge_name;
+                  local_weight+=properties_name;
+                }
+              }  
+            }
+         }
+#pragma omp critical
+{
+                total_num_edges += local_edge_num;
+                total_vid_sum += local_vid_sum;
+                total_weight+=local_weight;
+}
+      }
+      non_const_this->tm.transactionCompleted(tx);
+      std::cout<<"total edge number is "<<total_num_edges<<std::endl;
+      std::cout<<"total vids sum is "<<total_vid_sum<<std::endl;
+      std::cout<<"total weight is "<<total_weight<<std::endl;
+    }
 }

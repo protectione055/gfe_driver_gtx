@@ -110,6 +110,10 @@ namespace gfe::library {
         return m_pHashMap;
     }
 
+    void BwGraphDriver::analytical_workload_end(){
+       // BwGraph->on_read_workload_finishing
+    }
+
     void BwGraphDriver::finish_loading() {
         BwGraph->whole_label_graph_eager_consolidation(1);
     }
@@ -1174,19 +1178,22 @@ updates in the pull direction to remove the need for atomics.
 #pragma omp parallel
         {
             uint8_t thread_ud = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_edge_delta_iterator(thread_ud);
 #pragma omp for
             for (uint64_t v = 1; v <= max_vertex_id; v++) {
                 scores[v - 1] = init_score;
 
                 // compute the outdegree of the vertex
                 if (!transaction.get_vertex(v, thread_ud).empty()) { // check the vertex exists
-                    uint64_t degree = 0;
-                    auto iterator = transaction.simple_get_edges(v, /* label ? */ 1,thread_ud);
+                    /*uint64_t degree = 0;
+                    //auto iterator = transaction.simple_get_edges(v, 1,thread_ud);
+                    transaction.simple_get_edges(v,1,thread_ud,iterator);
                     while (iterator.valid()) {
                         degree++; //iterator.next();
                     }
-                    iterator.close();
-                    degrees[v - 1] = degree;
+                    iterator.close();*/
+                    transaction.simple_get_edges(v,1,thread_ud,iterator);
+                    degrees[v - 1] = iterator.get_vertex_degree();
                 } else {
                     degrees[v - 1] = numeric_limits<uint64_t>::max();
                 }
@@ -1222,13 +1229,14 @@ updates in the pull direction to remove the need for atomics.
 #pragma omp parallel
             {
                 uint8_t thread_id = graph->get_openmp_worker_thread_id();
+                auto iterator = transaction.generate_edge_delta_iterator(thread_id);
 #pragma omp for schedule(dynamic, 64)
                 for (uint64_t v = 1; v <= max_vertex_id; v++) {
                     if (degrees[v-1] == numeric_limits<uint64_t>::max()) { continue; } // the vertex does not exist
 
                     double incoming_total = 0;
-                    auto iterator = transaction.simple_get_edges(v, /* label ? */
-                                                                 1,thread_id); // fixme: incoming edges for directed graphs
+                    //auto iterator = transaction.simple_get_edges(v, /* label ? */1,thread_id); // fixme: incoming edges for directed graphs
+                    transaction.simple_get_edges(v, /* label ? */1,thread_id,iterator);
                     while (iterator.valid()) {
                         uint64_t u = iterator.dst_id();
                         incoming_total += outgoing_contrib[u-1];
@@ -1485,9 +1493,50 @@ more consistent performance for undirected graphs.
 
         return ptr_components;
     }
-
+    static void do_weighted_scan(bg::SharedROTransaction& transaction, uint64_t max_vertex_id){
+        uint64_t total_edge_num = 0;
+        uint64_t total_vid_sum = 0;
+        double total_weight = 0;
+        auto graph = transaction.get_graph();
+#pragma omp parallel
+        {
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_edge_delta_iterator(thread_id);
+            uint64_t local_degree = 0;
+            uint64_t  local_vid = 0;
+            double local_weight = 0;
+#pragma omp for
+            for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                     // compute the outdegree of the vertex
+                //if (!transaction.get_vertex(v, thread_id).empty()) { // check the vertex exists
+                    //auto iterator = transaction.simple_get_edges(v, /* label ? */ 1,thread_id);
+                    transaction.simple_get_edges(v,1,thread_id,iterator);
+                    while (iterator.valid()) {
+                        local_degree++; //iterator.next();
+                        local_vid+=iterator.dst_id();
+                        //string_view payload = iterator.edge_delta_data();
+                        //double w = *reinterpret_cast<const double*>(payload.data());
+                        double w = iterator.edge_delta_weight();
+                        local_weight +=w;
+                    }
+                    iterator.close();
+               // } 
+            }
+#pragma omp critical
+{
+                total_edge_num += local_degree;
+                total_vid_sum += local_vid;
+                total_weight+=local_weight;
+}
+            transaction.thread_on_openmp_section_finish(thread_id);
+        }
+        graph->on_openmp_section_finishing();
+        std::cout<<"total degree is "<<total_edge_num<<std::endl;
+        std::cout<<"total vid sum is "<<total_vid_sum<<std::endl;
+        std::cout<<"total weight is "<<total_weight<<std::endl;
+    }
     void BwGraphDriver::wcc(const char* dump2file) {
-        utility::TimeoutService timeout { m_timeout };
+        /*utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
         auto transaction =BwGraph->begin_shared_read_only_transaction();
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
@@ -1503,7 +1552,10 @@ more consistent performance for undirected graphs.
 
         // store the results in the given file
         if(dump2file != nullptr)
-            save_results(external_ids, dump2file);
+            save_results(external_ids, dump2file);*/
+        auto transaction =BwGraph->begin_shared_read_only_transaction();
+        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        do_weighted_scan(transaction,max_vertex_id);
     }
 /*****************************************************************************
  *                                                                           *
@@ -1574,9 +1626,48 @@ more consistent performance for undirected graphs.
             return ptr_labels1;
         }
     }
+    static void do_topology_scan(bg::SharedROTransaction& transaction, uint64_t max_vertex_id){
+        uint64_t total_edge_num = 0;
+        uint64_t total_vid_sum = 0;
+        auto graph = transaction.get_graph();
+#pragma omp parallel
+        {
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_edge_delta_iterator(thread_id);
+            uint64_t local_degree = 0;
+            uint64_t  local_vid = 0;
+#pragma omp for
+            for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                     // compute the outdegree of the vertex
+                //if (!transaction.get_vertex(v, thread_id).empty()) { // check the vertex exists
+                    //auto iterator = transaction.simple_get_edges(v, /* label ? */ 1,thread_id);
+                    transaction.simple_get_edges(v,1,thread_id,iterator);
+                    //auto iterator = transaction.early_stop_get_edges(v, /* label ? */ 1,thread_id);
+                    while (iterator.valid()) {
+                        local_degree++; //iterator.next();
+                        local_vid+=iterator.dst_id();
+                    }
+                    iterator.close();
+                //} 
+            }
+#pragma omp critical
+{
+                total_edge_num += local_degree;
+                total_vid_sum += local_vid;
+}
+            transaction.thread_on_openmp_section_finish(thread_id);
+        }
+        graph->on_openmp_section_finishing();
+        std::cout<<"total degree is "<<total_edge_num<<std::endl;
+        std::cout<<"total vid sum is "<<total_vid_sum<<std::endl;
+    }
+    
     //todo:: fix iterator
     void BwGraphDriver::cdlp(uint64_t max_iterations, const char* dump2file) {
-        if(m_is_directed) { ERROR("This implementation of the CDLP does not support directed graphs"); }
+        auto transaction =BwGraph->begin_shared_read_only_transaction();
+        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        do_topology_scan(transaction,max_vertex_id);
+     /*   if(m_is_directed) { ERROR("This implementation of the CDLP does not support directed graphs"); }
 
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
@@ -1594,7 +1685,8 @@ more consistent performance for undirected graphs.
 
         // Store the results in the given file
         if(dump2file != nullptr)
-            save_results(external_ids, dump2file);
+            save_results(external_ids, dump2file);*/
+        
     }
 /*****************************************************************************
  *                                                                           *
@@ -1767,6 +1859,7 @@ more consistent performance for undirected graphs.
 #pragma omp parallel
         {
             uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_edge_delta_iterator(thread_id);
             vector<vector<NodeID> > local_bins(0);
             size_t iter = 0;
 
@@ -1779,12 +1872,13 @@ more consistent performance for undirected graphs.
                 for (size_t i=0; i < curr_frontier_tail; i++) {
                     NodeID u = frontier[i];
                     if (dist[u-1] >= delta * static_cast<WeightT>(curr_bin_index)) {
-                        auto iterator = transaction.simple_get_edges(u, /* label */ 1,thread_id);
+                        //auto iterator = transaction.simple_get_edges(u, /* label */ 1,thread_id);
+                        transaction.simple_get_edges(u,1,thread_id,iterator);
                         while(iterator.valid()){
                             uint64_t v = iterator.dst_id();
-                            string_view payload = iterator.edge_delta_data();
-                            double w = *reinterpret_cast<const double*>(payload.data());
-
+                           // string_view payload = iterator.edge_delta_data();
+                           // double w = *reinterpret_cast<const double*>(payload.data());
+                            double w = iterator.edge_delta_weight();
                             WeightT old_dist = dist[v-1];
                             WeightT new_dist = dist[u-1] + w;
                             if (new_dist < old_dist) {
@@ -1807,10 +1901,10 @@ more consistent performance for undirected graphs.
 
                             //iterator.next();
                         }
-                        iterator.close();
+                        //iterator.close();
                     }
                 }
-
+                iterator.close();
                 for (size_t i=curr_bin_index; i < local_bins.size(); i++) {
                     if (!local_bins[i].empty()) {
 #pragma omp critical
@@ -1847,6 +1941,100 @@ more consistent performance for undirected graphs.
         return dist;
     }
 
+    static
+    gapbs::pvector<WeightT> do_static_sssp(bg::SharedROTransaction& transaction, uint64_t num_edges, uint64_t max_vertex_id, uint64_t source, double delta, utility::TimeoutService& timer) {
+        // Init
+        gapbs::pvector<WeightT> dist(max_vertex_id, numeric_limits<WeightT>::infinity());
+        dist[source-1] = 0;
+        gapbs::pvector<NodeID> frontier(num_edges);
+        // two element arrays for double buffering curr=iter&1, next=(iter+1)&1
+        size_t shared_indexes[2] = {0, kMaxBin};
+        size_t frontier_tails[2] = {1, 0};
+        frontier[0] = source;
+         //auto graph = transaction.get_graph();
+#pragma omp parallel
+        {
+            //uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            vector<vector<NodeID> > local_bins(0);
+            size_t iter = 0;
+
+            while (shared_indexes[iter&1] != kMaxBin) {
+                size_t &curr_bin_index = shared_indexes[iter&1];
+                size_t &next_bin_index = shared_indexes[(iter+1)&1];
+                size_t &curr_frontier_tail = frontier_tails[iter&1];
+                size_t &next_frontier_tail = frontier_tails[(iter+1)&1];
+#pragma omp for nowait schedule(dynamic, 64)
+                for (size_t i=0; i < curr_frontier_tail; i++) {
+                    NodeID u = frontier[i];
+                    if (dist[u-1] >= delta * static_cast<WeightT>(curr_bin_index)) {
+                        auto iterator = transaction.static_get_edges(u, /* label */ 1);
+                        while(iterator.valid()){
+                            uint64_t v = iterator.dst_id();
+                            string_view payload = iterator.edge_delta_data();
+                            double w = *reinterpret_cast<const double*>(payload.data());
+
+                            WeightT old_dist = dist[v-1];
+                            WeightT new_dist = dist[u-1] + w;
+                            if (new_dist < old_dist) {
+                                bool changed_dist = true;
+                                while (!gapbs::compare_and_swap(dist[v-1], old_dist, new_dist)) {
+                                    old_dist = dist[v-1];
+                                    if (old_dist <= new_dist) {
+                                        changed_dist = false;
+                                        break;
+                                    }
+                                }
+                                if (changed_dist) {
+                                    size_t dest_bin = new_dist/delta;
+                                    if (dest_bin >= local_bins.size()) {
+                                        local_bins.resize(dest_bin+1);
+                                    }
+                                    local_bins[dest_bin].push_back(v);
+                                }
+                            }
+
+                            //iterator.next();
+                        }
+                        //iterator.close();
+                    }
+                }
+
+                for (size_t i=curr_bin_index; i < local_bins.size(); i++) {
+                    if (!local_bins[i].empty()) {
+#pragma omp critical
+                        next_bin_index = min(next_bin_index, i);
+                        break;
+                    }
+                }
+
+#pragma omp barrier
+#pragma omp single nowait
+                {
+                    curr_bin_index = kMaxBin;
+                    curr_frontier_tail = 0;
+                }
+
+                if (next_bin_index < local_bins.size()) {
+                    size_t copy_start = gapbs::fetch_and_add(next_frontier_tail, local_bins[next_bin_index].size());
+                    copy(local_bins[next_bin_index].begin(), local_bins[next_bin_index].end(), frontier.data() + copy_start);
+                    local_bins[next_bin_index].resize(0);
+                }
+
+                iter++;
+#pragma omp barrier
+            }
+
+#if defined(DEBUG)
+            #pragma omp single
+        COUT_DEBUG("took " << iter << " iterations");
+#endif
+            //transaction.thread_on_openmp_section_finish(thread_id);
+        }
+        //graph->on_openmp_section_finishing();
+
+        return dist;
+    }
+
     void BwGraphDriver::sssp(uint64_t source_vertex_id, const char* dump2file) {
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
@@ -1858,10 +2046,12 @@ more consistent performance for undirected graphs.
         // Run the SSSP algorithm
         double delta = 2.0; // same value used in the GAPBS, at least for most graphs
         auto distances = do_sssp(transaction, num_edges, max_vertex_id, root, delta, timeout);
+        //auto distances = do_static_sssp(transaction, num_edges, max_vertex_id, root, delta, timeout);
         if(timeout.is_timeout()){ transaction.commit(); RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);  }
 
         // Translate the vertex IDs
         auto external_ids = translate(&transaction, distances.data(), max_vertex_id);
+        //auto external_ids = static_translate(&transaction, distances.data(), max_vertex_id);
         transaction.commit(); // read-only transaction, abort == commit
         if(timeout.is_timeout()){ RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
 

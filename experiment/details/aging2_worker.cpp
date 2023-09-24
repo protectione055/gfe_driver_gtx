@@ -370,15 +370,15 @@ namespace gfe::experiment::details {
                 if(current_weight!=numeric_limits<double>::signaling_NaN()){
                     new_weight+=current_weight;
                 }*/
-                m_library->update_edge_v1(graph::WeightedEdge(sources[i],destinations[i],weights[i]));
-               // m_library->add_edge_v3(graph::WeightedEdge(sources[i],destinations[i],weights[i]));
+                //m_library->update_edge_v1(graph::WeightedEdge(sources[i],destinations[i],weights[i]));
+                m_library->add_edge_v3(graph::WeightedEdge(sources[i],destinations[i],(weights[i]+1)));
                // LOG("Thread "<<m_worker_id<<" insert "<<sources[i]<<" "<<destinations[i]);
                 //while (!m_library->add_edge_v3(graph::WeightedEdge(sources[i],destinations[i],weights[i]))) { /* nop */ };
                 //while (!m_library->update_edge_v1(graph::WeightedEdge(sources[i],destinations[i],weights[i]))) { /* nop */ };
 
             }
         }
-        LOG("Worker "<<m_worker_id<<" finished in this batch");
+       //LOG("Worker "<<m_worker_id<<" finished in this batch");
     }
     void Aging2Worker::load_edge(uint64_t source, uint64_t destination, double weight) {
         if (m_updates.empty()) { m_updates.append(new vector<graph::WeightedEdge>()); }

@@ -166,14 +166,14 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
         }
 
         if(m_properties.cdlp.m_enabled){
-            LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": CDLP, max_iterations: " << m_properties.cdlp.m_max_iterations);
+            //LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": CDLP, max_iterations: " << m_properties.cdlp.m_max_iterations);
             string path_tmp = get_temporary_path("cdlp", i);
             const char* path_result = m_validate_output_enabled ? path_tmp.c_str() : nullptr;
             try {
                 t_local.start();
                 interface->cdlp(m_properties.cdlp.m_max_iterations, path_result);
                 t_local.stop();
-                LOG(">> CDLP Execution time: " << t_local);
+               // LOG(">> CDLP Execution time: " << t_local);
                 m_exec_cdlp.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){
@@ -301,14 +301,14 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
             }
         }
         if(m_properties.wcc.m_enabled){
-            LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": WCC");
+           // LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": WCC");
             string path_tmp = get_temporary_path("wcc", i);
             const char* path_result = m_validate_output_enabled ? path_tmp.c_str() : nullptr;
             try {
                 t_local.start();
                 interface->wcc(path_result);
                 t_local.stop();
-                LOG(">> WCC Execution time: " << t_local);
+              //  LOG(">> WCC Execution time: " << t_local);
                 m_exec_wcc.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){
