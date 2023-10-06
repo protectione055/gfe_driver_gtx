@@ -91,6 +91,8 @@ class Aging2Worker {
 
     template<bool with_latency>
     void graph_execute_batch_updates0(graph::WeightedEdge* __restrict updates, uint64_t num_updates);
+    template<bool with_latency>
+    void graph_execute_batch_updates1(graph::WeightedEdge* __restrict updates, uint64_t num_updates);
 
     // Insert the given edge in the graph
     template<bool with_latency>

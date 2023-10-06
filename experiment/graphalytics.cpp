@@ -234,14 +234,14 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
         }
 
         if(m_properties.pagerank.m_enabled){
-            LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": PageRank, damping factor: " << m_properties.pagerank.m_damping_factor << ", num_iterations: " << m_properties.pagerank.m_num_iterations);
+           // LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": PageRank, damping factor: " << m_properties.pagerank.m_damping_factor << ", num_iterations: " << m_properties.pagerank.m_num_iterations);
             string path_tmp = get_temporary_path("pagerank", i);
             const char* path_result = m_validate_output_enabled ? path_tmp.c_str() : nullptr;
             try {
                 t_local.start();
                 interface->pagerank(m_properties.pagerank.m_num_iterations, m_properties.pagerank.m_damping_factor, path_result);
                 t_local.stop();
-                LOG(">> PageRank Execution time: " << t_local);
+              //  LOG(">> PageRank Execution time: " << t_local);
                 m_exec_pagerank.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){
@@ -268,14 +268,14 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
         }
 
         if(m_properties.sssp.m_enabled){
-            LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": SSSP, source: " << m_properties.sssp.m_source_vertex);
+            //LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": SSSP, source: " << m_properties.sssp.m_source_vertex);
             string path_tmp = get_temporary_path("sssp", i);
             const char* path_result = m_validate_output_enabled ? path_tmp.c_str() : nullptr;
             try {
                 t_local.start();
                 interface->sssp(m_properties.sssp.m_source_vertex, path_result);
                 t_local.stop();
-                LOG(">> SSSP Execution time: " << t_local);
+                //LOG(">> SSSP Execution time: " << t_local);
                 m_exec_sssp.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){

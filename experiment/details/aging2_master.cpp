@@ -121,7 +121,7 @@ namespace gfe::experiment::details {
         //sortledton:version
         //for(uint64_t worker_id = 1; worker_id < parameters().m_num_threads; worker_id++){
 #if HAVE_SORTLEDTON
-        for(uint64_t worker_id = 1; worker_id < parameters().m_num_threads; worker_id++){
+        for(uint64_t worker_id = 0; worker_id < parameters().m_num_threads; worker_id++){
 #else
         for (uint64_t worker_id = 0; worker_id < parameters().m_num_threads; worker_id++) {
 #endif
@@ -262,8 +262,8 @@ namespace gfe::experiment::details {
         m_time_start = chrono::steady_clock::now();
 
         // init the build service (the one that creates the new snapshots/deltas)
-        BuildThread build_service{parameters().m_library, static_cast<int>(parameters().m_num_threads) + 2,
-                                  parameters().m_build_frequency};
+       // BuildThread build_service{parameters().m_library, static_cast<int>(parameters().m_num_threads) + 2,
+        //                          parameters().m_build_frequency};
 
         auto start_time = chrono::steady_clock::now();
         Timer timer;
@@ -272,7 +272,7 @@ namespace gfe::experiment::details {
         for (auto w: m_workers) w->execute_updates();
         m_experiment_running = true;
         wait_and_record();
-        build_service.stop();
+        //build_service.stop();
         m_parameters.m_library->build(); // flush last changes
         m_parameters.m_library->updates_stop();
         timer.stop();
@@ -284,7 +284,7 @@ namespace gfe::experiment::details {
         total_time_microseconds+=timer.microseconds();
         cooloff(start_time);
         m_results.m_completion_time = timer.microseconds();
-        m_results.m_num_build_invocations = build_service.num_invocations();
+        //m_results.m_num_build_invocations = build_service.num_invocations();
         m_results.m_num_levels_created = m_parameters.m_library->num_levels();
        // m_parameters.m_library->print_and_clear_txn_stats();
     }

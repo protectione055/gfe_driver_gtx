@@ -552,11 +552,12 @@ namespace gfe::library {
         bg::vertex_t internal_destination_id = slock2->second;
 
         auto tx = BwGraph->begin_read_only_transaction();
-        string_view bg_weight = tx.get_edge(internal_source_id, internal_destination_id, 1);
+       /*string_view bg_weight = tx.get_edge(internal_source_id, internal_destination_id, 1);
         double weight = numeric_limits<double>::signaling_NaN();
         if(bg_weight.size() > 0){ // the edge exists
             weight = *(reinterpret_cast<const double*>(bg_weight.data()));
-        }
+        }*/
+        auto weight = tx.get_edge_weight(internal_source_id, internal_destination_id, 1);
         tx.commit(); //read-only txn should not abort in bwgraph
         return weight;
     }
@@ -754,14 +755,15 @@ namespace gfe::library {
 #pragma omp parallel reduction(+ : awake_count)
         {
             uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_edge_delta_iterator(thread_id);
 #pragma omp for schedule(dynamic, 1024)
             for (uint64_t u = 1; u <= max_vertex_id; u++) {
                 if (distances[u - 1] == numeric_limits<int64_t>::max()) continue; // the vertex does not exist
                 COUT_DEBUG_BFS("explore: " << u << ", distance: " << distances[u]);
 
                 if (distances[u - 1] < 0) { // the node has not been visited yet
-                    auto iterator = transaction.simple_get_edges(u, /* label */
-                                                                 1,thread_id); // fixme: incoming edges for directed graphs
+                    //auto iterator = transaction.simple_get_edges(u, /* label */1,thread_id); // fixme: incoming edges for directed graphs
+                    transaction.simple_get_edges(u,1,thread_id,iterator);
                     //for debug:
                     //uint64_t counter = 0;
                     while (iterator.valid()) {
@@ -793,14 +795,15 @@ namespace gfe::library {
 //#pragma omp parallel for schedule(dynamic, 1024) reduction(+ : awake_count)
 #pragma omp parallel reduction(+ : awake_count)
         {
+            auto iterator = transaction.generate_static_edge_delta_iterator();
 #pragma omp for schedule(dynamic, 1024)
             for (uint64_t u = 1; u <= max_vertex_id; u++) {
                 if (distances[u - 1] == numeric_limits<int64_t>::max()) continue; // the vertex does not exist
                 COUT_DEBUG_BFS("explore: " << u << ", distance: " << distances[u]);
 
                 if (distances[u - 1] < 0) { // the node has not been visited yet
-                    auto iterator = transaction.static_get_edges(u, /* label */
-                                                                 1); // fixme: incoming edges for directed graphs
+                    //auto iterator = transaction.static_get_edges(u, 1); 
+                    transaction.static_get_edges(u,1,iterator);
 
                     while (iterator.valid()) {
                         uint64_t dst = iterator.dst_id();
@@ -826,6 +829,7 @@ namespace gfe::library {
 #pragma omp parallel reduction(+ : scout_count)
         {
             uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_edge_delta_iterator(thread_id);
           /*  if(thread_id>64){
                 std::cout<<static_cast<uint32_t>(thread_id)<<std::endl;
                 throw std::runtime_error("error, bad thread ID");
@@ -836,7 +840,8 @@ namespace gfe::library {
             for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
                 int64_t u = *q_iter;
                 COUT_DEBUG_BFS("explore: " << u);
-                auto iterator = transaction.simple_get_edges(u, /* label */ 1, thread_id);
+                //auto iterator = transaction.simple_get_edges(u, /* label */ 1, thread_id);
+                transaction.simple_get_edges(u,1,thread_id,iterator);
                 while(iterator.valid()){
                     uint64_t dst = iterator.dst_id();
                     COUT_DEBUG_BFS("\toutgoing edge: " << dst);
@@ -865,12 +870,13 @@ namespace gfe::library {
 #pragma omp parallel reduction(+ : scout_count)
         {
             gapbs::QueueBuffer<int64_t> lqueue(queue);
-
+            auto iterator = transaction.generate_static_edge_delta_iterator();
 #pragma omp for schedule(dynamic, 64)
             for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
                 int64_t u = *q_iter;
                 COUT_DEBUG_BFS("explore: " << u);
-                auto iterator = transaction.static_get_edges(u, /* label */ 1);
+                //auto iterator = transaction.static_get_edges(u, /* label */ 1);
+                transaction.static_get_edges(u,1,iterator);
                 while(iterator.valid()){
                     uint64_t dst = iterator.dst_id();
                     COUT_DEBUG_BFS("\toutgoing edge: " << dst);
@@ -922,19 +928,22 @@ namespace gfe::library {
 #pragma omp parallel
         {
             uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_edge_delta_iterator(thread_id);
 #pragma omp for
             for (uint64_t n = 1; n <= max_vertex_id; n++) {
                 if (transaction.get_vertex(n, thread_id).empty()) { // the vertex does not exist
                     distances[n - 1] = numeric_limits<int64_t>::max();
                 } else { // the vertex exists
                     // Retrieve the out degree for the vertex n
-                    uint64_t out_degree = 0;
-                    auto iterator = transaction.simple_get_edges(n, /* label */ 1, thread_id);
+                    /*uint64_t out_degree = 0;
+                    auto iterator = transaction.simple_get_edges(n,  1, thread_id);
                     while (iterator.valid()) {
                         out_degree++;
                         // iterator.next();
                     }
-                    iterator.close();
+                    iterator.close();*/
+                    transaction.simple_get_edges(n,1,thread_id,iterator);
+                    uint64_t out_degree = iterator.get_vertex_degree();
                     distances[n - 1] = out_degree != 0 ? -out_degree : -1;
                 }
             }
@@ -949,6 +958,7 @@ namespace gfe::library {
 
 #pragma omp parallel
         {
+            auto iterator = transaction.generate_static_edge_delta_iterator();
 #pragma omp for
             for (uint64_t n = 1; n <= max_vertex_id; n++) {
                 //todo::add static get vertex
@@ -956,12 +966,15 @@ namespace gfe::library {
                     distances[n - 1] = numeric_limits<int64_t>::max();
                 } else { // the vertex exists
                     // Retrieve the out degree for the vertex n
-                    uint64_t out_degree = 0;
-                    auto iterator = transaction.static_get_edges(n, /* label */ 1);
+
+                   /*uint64_t out_degree = 0;
+                   auto iterator = transaction.static_get_edges(n,  1);
                     while (iterator.valid()) {
                         out_degree++;
                         // iterator.next();
-                    }
+                    }*/
+                    transaction.static_get_edges(n,1,iterator);
+                    uint64_t out_degree = static_cast<uint64_t>(iterator.vertex_degree());
                     distances[n - 1] = out_degree != 0 ? -out_degree : -1;
                 }
             }
@@ -991,9 +1004,10 @@ namespace gfe::library {
             auto graph = transaction.get_graph();
             uint8_t thread_id = graph->get_openmp_worker_thread_id();
             auto iterator = transaction.simple_get_edges(root, 1,thread_id);
-            while(iterator.valid()){ scout_count++; //iterator.next();
+            /*while(iterator.valid()){ scout_count++; //iterator.next();
              }
-            iterator.close();
+            iterator.close();*/
+            scout_count = iterator.get_vertex_degree();
             graph->on_openmp_section_finishing();
         }
         int64_t distance = 1; // current distance
@@ -1043,8 +1057,9 @@ namespace gfe::library {
         int64_t scout_count = 0;
         { // retrieve the out degree of the root
             auto iterator = transaction.static_get_edges(root, 1);
-            while(iterator.valid()){ scout_count++; //iterator.next();
-            }
+            /*while(iterator.valid()){ scout_count++; //iterator.next();
+            }*/
+            scout_count = iterator.vertex_degree();
         }
         int64_t distance = 1; // current distance
 
@@ -1090,8 +1105,8 @@ namespace gfe::library {
         //Timer t;
         //t.start();
         // Run the BFS algorithm
-        unique_ptr<int64_t[]> ptr_result = do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
-        //unique_ptr<int64_t[]> ptr_result = static_do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
+        //unique_ptr<int64_t[]> ptr_result = do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
+        unique_ptr<int64_t[]> ptr_result = static_do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
         //cout << "BFS took " << t << endl;
         if(timeout.is_timeout()){
             transaction.commit(); // in bwgraph it is necessary
@@ -1099,8 +1114,8 @@ namespace gfe::library {
         }
 
         // translate the logical vertex IDs into the external vertex IDs
-        auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
-        //auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
+        //auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
+        auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
         //cout << "Translation took " << t << endl;
         transaction.commit(); // not sure if strictly necessary
         if(timeout.is_timeout()){
@@ -1191,7 +1206,9 @@ updates in the pull direction to remove the need for atomics.
                     while (iterator.valid()) {
                         degree++; //iterator.next();
                     }
-                    iterator.close();*/
+                    iterator.close();
+                    degrees[v - 1] = degree;*/
+                    
                     transaction.simple_get_edges(v,1,thread_ud,iterator);
                     degrees[v - 1] = iterator.get_vertex_degree();
                 } else {
@@ -1267,19 +1284,22 @@ updates in the pull direction to remove the need for atomics.
 #pragma omp parallel
         {
             //uint8_t thread_ud = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_static_edge_delta_iterator();
 #pragma omp for
             for (uint64_t v = 1; v <= max_vertex_id; v++) {
                 scores[v - 1] = init_score;
 
                 // compute the outdegree of the vertex
                 if (!transaction.static_get_vertex(v).empty()) { // check the vertex exists
-                    uint64_t degree = 0;
-                    auto iterator = transaction.static_get_edges(v, /* label ? */ 1);
-                    while (iterator.valid()) {
+                    //uint64_t degree = 0;
+                    //auto iterator = transaction.static_get_edges(v, /* label ? */ 1);
+                    transaction.static_get_edges(v,1, iterator);
+                    /*while (iterator.valid()) {
                         degree++; //iterator.next();
-                    }
+                    }*/
                     //iterator.close();
-                    degrees[v - 1] = degree;
+                    //degrees[v - 1] = degree;
+                    degrees[v-1]=iterator.vertex_degree();
                 } else {
                     degrees[v - 1] = numeric_limits<uint64_t>::max();
                 }
@@ -1314,13 +1334,15 @@ updates in the pull direction to remove the need for atomics.
 #pragma omp parallel
             {
                 //uint8_t thread_id = graph->get_openmp_worker_thread_id();
+                auto iterator = transaction.generate_static_edge_delta_iterator();
 #pragma omp for schedule(dynamic, 64)
                 for (uint64_t v = 1; v <= max_vertex_id; v++) {
                     if (degrees[v-1] == numeric_limits<uint64_t>::max()) { continue; } // the vertex does not exist
 
                     double incoming_total = 0;
-                    auto iterator = transaction.static_get_edges(v, /* label ? */
-                                                                 1); // fixme: incoming edges for directed graphs
+                    /*auto iterator = transaction.static_get_edges(v, 
+                                                                 1); // fixme: incoming edges for directed graphs*/
+                    transaction.static_get_edges(v,1,iterator);
                     while (iterator.valid()) {
                         uint64_t u = iterator.dst_id();
                         incoming_total += outgoing_contrib[u-1];
@@ -1348,13 +1370,13 @@ updates in the pull direction to remove the need for atomics.
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
 
         // Run the PageRank algorithm
-        unique_ptr<double[]> ptr_result = do_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
-        //unique_ptr<double[]> ptr_result = do_static_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
+        //unique_ptr<double[]> ptr_result = do_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
+        unique_ptr<double[]> ptr_result = do_static_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
         if(timeout.is_timeout()){ transaction.commit(); RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);  }
 
         // Retrieve the external node ids
-        auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
-        //auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
+        //auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
+        auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
         transaction.commit(); // read-only transaction, abort == commit
         if(timeout.is_timeout()){ RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
 
@@ -1955,6 +1977,7 @@ more consistent performance for undirected graphs.
 #pragma omp parallel
         {
             //uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_static_edge_delta_iterator();
             vector<vector<NodeID> > local_bins(0);
             size_t iter = 0;
 
@@ -1967,12 +1990,13 @@ more consistent performance for undirected graphs.
                 for (size_t i=0; i < curr_frontier_tail; i++) {
                     NodeID u = frontier[i];
                     if (dist[u-1] >= delta * static_cast<WeightT>(curr_bin_index)) {
-                        auto iterator = transaction.static_get_edges(u, /* label */ 1);
+                        //auto iterator = transaction.static_get_edges(u, /* label */ 1);
+                        transaction.static_get_edges(u,1,iterator);
                         while(iterator.valid()){
                             uint64_t v = iterator.dst_id();
-                            string_view payload = iterator.edge_delta_data();
-                            double w = *reinterpret_cast<const double*>(payload.data());
-
+                            /*string_view payload = iterator.edge_delta_data();
+                            double w = *reinterpret_cast<const double*>(payload.data());*/
+                            double w = iterator.get_weight();
                             WeightT old_dist = dist[v-1];
                             WeightT new_dist = dist[u-1] + w;
                             if (new_dist < old_dist) {
@@ -2045,13 +2069,13 @@ more consistent performance for undirected graphs.
 
         // Run the SSSP algorithm
         double delta = 2.0; // same value used in the GAPBS, at least for most graphs
-        auto distances = do_sssp(transaction, num_edges, max_vertex_id, root, delta, timeout);
-        //auto distances = do_static_sssp(transaction, num_edges, max_vertex_id, root, delta, timeout);
+        //auto distances = do_sssp(transaction, num_edges, max_vertex_id, root, delta, timeout);
+        auto distances = do_static_sssp(transaction, num_edges, max_vertex_id, root, delta, timeout);
         if(timeout.is_timeout()){ transaction.commit(); RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);  }
 
         // Translate the vertex IDs
-        auto external_ids = translate(&transaction, distances.data(), max_vertex_id);
-        //auto external_ids = static_translate(&transaction, distances.data(), max_vertex_id);
+        //auto external_ids = translate(&transaction, distances.data(), max_vertex_id);
+        auto external_ids = static_translate(&transaction, distances.data(), max_vertex_id);
         transaction.commit(); // read-only transaction, abort == commit
         if(timeout.is_timeout()){ RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
 

@@ -18,7 +18,12 @@
         "limits": "cpp",
         "semaphore": "cpp",
         "valarray": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "future": "cpp",
+        "*.ipp": "cpp",
+        "*.tcc": "cpp",
+        "fstream": "cpp",
+        "iterator": "cpp"
     },
     "cmake.sourceDirectory": "/home/zhou822/gfe_driver_bigdata/third-party/googletest"
 }

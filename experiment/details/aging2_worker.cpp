@@ -164,8 +164,11 @@ namespace gfe::experiment::details {
     void Aging2Worker::main_thread() {
         COUT_DEBUG("Worker started");
         concurrency::set_thread_name("Worker #" + to_string(m_worker_id));
-
+#if HAVE_SORTLEDTON
+        m_library->on_thread_init(m_worker_id+1);
+#else
         m_library->on_thread_init(m_worker_id);
+#endif
 
         bool terminate = false;
         Task task; // current task
@@ -210,8 +213,11 @@ namespace gfe::experiment::details {
                     break;
             }
         } while (!terminate);
-
+#if HAVE_SORTLEDTON
+        m_library->on_thread_destroy(m_worker_id+1);
+#else
         m_library->on_thread_destroy(m_worker_id);
+#endif
 
         // not really necessary, only present for consistency ..
         unique_lock<mutex> lock(m_mutex);
@@ -472,10 +478,11 @@ namespace gfe::experiment::details {
             assert(m_master.parameters().m_measure_latency == false);
             assert(m_latency_deletions == nullptr);
             graph_execute_batch_updates0</* measure latency ? */ false>(updates, num_updates);
+            //graph_execute_batch_updates1</* measure latency ? */ false>(updates, num_updates);
         } else {
             assert(m_master.parameters().m_measure_latency == true);
             assert(m_latency_deletions != nullptr);
-
+            //graph_execute_batch_updates1</* measure latency ? */ true>(updates, num_updates);
             graph_execute_batch_updates0</* measure latency ? */ true>(updates, num_updates);
         }
     }
@@ -494,7 +501,22 @@ namespace gfe::experiment::details {
             m_num_operations++;
         }
     }
+    template<bool with_latency>
+    void Aging2Worker::graph_execute_batch_updates1(graph::WeightedEdge *__restrict updates, uint64_t num_updates) {
+        for (uint64_t i = 0; i < num_updates; i++) {
+            if (m_master.m_stop_experiment) break; // timeout, we're done
 
+            if (updates[i].m_weight >= 0) { // insertion
+                graph_insert_edge<with_latency>(updates[i]);
+                auto weight1 = m_library->get_weight(updates[i].m_source,updates[i].m_destination);
+                auto weight2 = m_library->get_weight(updates[i].m_destination,updates[i].m_source);
+            } else { // deletion
+                graph_remove_edge<with_latency>(updates[i].edge());
+            }
+
+            m_num_operations++;
+        }
+    }
     template<bool with_latency>
     void Aging2Worker::graph_insert_edge(graph::WeightedEdge edge) {
         if (!m_master.is_directed() && m_uniform(m_random) < 0.5) edge.swap_src_dst(); // noise
