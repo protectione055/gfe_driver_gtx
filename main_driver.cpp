@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <iostream>
-
+#include <sys/resource.h>
 #include "common/database.hpp"
 #include "common/error.hpp"
 #include "common/system.hpp"
@@ -250,7 +250,9 @@ static void run_standalone(int argc, char* argv[]){
         exp_seq.execute();
         exp_seq.report(configuration().has_database());
     }
-
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    std::cout << "Memory used: " << usage.ru_maxrss << " KB" << std::endl;
     LOG( "[driver] Done" );
 }
 
