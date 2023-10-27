@@ -1,15 +1,15 @@
 
+Our version of GFE_Driver is developed on top of the original GFE_Driver (https://github.com/cwida/gfe_driver) and modified GFE_Driver (https://github.com/PerFuchs/gfe_driver/tree/master) used to evaluate previous works.
+
 GFE Driver
 ---
 
-The GFE (Graph Framework Evaluation) Driver is the program used to run the experiments in "Sortledton: a universal
-graph data structure", measuring the throughput of updates in libraries supporting structural dynamic graphs and the completion times of 
-the [Graphalytics kernels](https://github.com/ldbc/ldbc_graphalytics). 
-The driver supports the following systems: [Sortledton](https://gitlab.db.in.tum.de/per.fuchs/sortledton), [Teseo](https://github.com/cwida/teseo), 
+The GFE (Graph Framework Evaluation) Driver is the program used to run the experiments in "Bw-Graph: A  Write-Optimized Lock-free Graph System with Transactional Support", measuring the throughput of updates in libraries supporting structural dynamic graphs and the completion times of 
+the [Graphalytics kernels](https://github.com/ldbc/ldbc_graphalytics) concurrently. 
+The driver supports the following systems: [Bw-Graph](https://anonymous.4open.science/r/BwGraph_v2-B9AC/README.md), [Sortledton](https://gitlab.db.in.tum.de/per.fuchs/sortledton), [Teseo](https://github.com/cwida/teseo), 
 [LLAMA](https://github.com/goatdb/llama), [GraphOne](https://github.com/the-data-lab/GraphOne), 
-[Stinger](http://stingergraph.com/) and [LiveGraph](https://github.com/thu-pacman/LiveGraph-Binary). 
-Additionally, it supports running the microbenchmarks from the Sortledton paper: [Microbenchmarks](https://gitlab.db.in.tum.de/per.fuchs/graph-data-structure-microbenchmarks).
-It can run three kinds experiments: insert all edges in a random permuted order from an input graph, 
+[Stinger](http://stingergraph.com/) and [LiveGraph](https://github.com/thu-pacman/LiveGraph-Binary) while we ran our experiments only for systems that support concurrent reads and writes under transactions (Bw-Graph, Sortledton, Teseo, and LiveGraph).
+It can run three kinds experiments: insert all edges in a random permuted order from an input graph, insert all edges in a timestamp-based order from an input graph,
 execute the updates specified by a [graphlog file](https://github.com/whatsthecraic/graphlog) and run the kernels of
 the Graphalytics suite: BFS, PageRank (PR), local triangle counting (LCC), weighted shortest paths (SSSP), 
 weakly connected components (WCC) and community detection through label propagation (CDLP).  
@@ -149,6 +149,14 @@ Then configure the driver with:
 ```
 mkdir build && cd build
 ../configure --enable-optimize --disable-debug --with-sortledton=/path/to/microbenchmark/build   
+```
+
+#### Bw-Graph
+Currently use the version on Anonymous GitHub at `https://anonymous.4open.science/r/BwGraph_v2-B9AC/README.md`. 
+Following the built instruction in its REAME to build Bw-Graph library. Then configure the driver with:
+```
+mkdir build && cd build
+../configure --enable-optimize --disable-debug --with-bwgraph=/path/to/Bw-Graph/build
 ```
 
 #### Microbenchmarks
