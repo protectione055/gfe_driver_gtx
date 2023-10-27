@@ -480,7 +480,7 @@ namespace gfe::library {
       tm.register_thread(0);
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
-      run_gc();
+      //run_gc();
 
       auto physical_src = tx.physical_id(source_vertex_id);
 
@@ -504,7 +504,7 @@ namespace gfe::library {
       tm.register_thread(0);
       SnapshotTransaction tx = tm.getSnapshotTransaction(ds, false);
 
-      run_gc();
+      //run_gc();
 
       auto pr = PageRank::page_rank_bs(tx, num_iterations, damping_factor);;
       auto external_ids = translate<double>(tx, pr);

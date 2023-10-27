@@ -1105,8 +1105,8 @@ namespace gfe::library {
         //Timer t;
         //t.start();
         // Run the BFS algorithm
-        //unique_ptr<int64_t[]> ptr_result = do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
-        unique_ptr<int64_t[]> ptr_result = static_do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
+        unique_ptr<int64_t[]> ptr_result = do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
+        //unique_ptr<int64_t[]> ptr_result = static_do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
         //cout << "BFS took " << t << endl;
         if(timeout.is_timeout()){
             transaction.commit(); // in bwgraph it is necessary
@@ -1114,8 +1114,8 @@ namespace gfe::library {
         }
 
         // translate the logical vertex IDs into the external vertex IDs
-        //auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
-        auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
+        auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
+        //auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
         //cout << "Translation took " << t << endl;
         transaction.commit(); // not sure if strictly necessary
         if(timeout.is_timeout()){
@@ -1219,7 +1219,54 @@ updates in the pull direction to remove the need for atomics.
         }
         graph->on_openmp_section_finishing();
         gapbs::pvector<double> outgoing_contrib(max_vertex_id, 0.0);
+        #if false
+        {
+            double dangling_sum = 0.0;
 
+            // for each node, precompute its contribution to all of its outgoing neighbours and, if it's a sink,
+            // add its rank to the `dangling sum' (to be added to all nodes).
+#pragma omp parallel for reduction(+:dangling_sum)
+            for(uint64_t v = 1; v <= max_vertex_id; v++){
+                uint64_t out_degree = degrees[v-1];
+                if(out_degree == numeric_limits<uint64_t>::max()){
+                    continue; // the vertex does not exist
+                } else if (out_degree == 0){ // this is a sink
+                    dangling_sum += scores[v-1];
+                } else {
+                    outgoing_contrib[v-1] = scores[v-1] / out_degree;
+                }
+            }
+
+            dangling_sum /= num_vertices;
+
+            // compute the new score for each node in the graph
+            //fixme: currently our txn does not support being executed by mutiple threads. It requires fetching thread_id for each operation execution from the table.
+//#pragma omp parallel for schedule(dynamic, 64)
+#pragma omp parallel
+            {
+                uint8_t thread_id = graph->get_openmp_worker_thread_id();
+                auto iterator = transaction.generate_edge_delta_iterator(thread_id);
+#pragma omp for schedule(dynamic, 64)
+                for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                    if (degrees[v-1] == numeric_limits<uint64_t>::max()) { continue; } // the vertex does not exist
+
+                    double incoming_total = 0;
+                    //auto iterator = transaction.simple_get_edges(v, /* label ? */1,thread_id); // fixme: incoming edges for directed graphs
+                    transaction.simple_get_edges(v, /* label ? */1,thread_id,iterator);
+                    while (iterator.valid()) {
+                        uint64_t u = iterator.dst_id();
+                        incoming_total += outgoing_contrib[u-1];
+                        //iterator.next();
+                    }
+                    iterator.close();
+                    // update the score
+                    scores[v-1] = base_score + damping_factor * (incoming_total + dangling_sum);
+                }
+                transaction.thread_on_openmp_section_finish(thread_id);
+            }
+            graph->on_openmp_section_finishing();
+        }
+        #endif
         // pagerank iterations
         for(uint64_t iteration = 0; iteration < num_iterations && !timer.is_timeout(); iteration++){
             double dangling_sum = 0.0;
@@ -1370,13 +1417,13 @@ updates in the pull direction to remove the need for atomics.
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
 
         // Run the PageRank algorithm
-        //unique_ptr<double[]> ptr_result = do_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
-        unique_ptr<double[]> ptr_result = do_static_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
+        unique_ptr<double[]> ptr_result = do_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
+        //unique_ptr<double[]> ptr_result = do_static_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
         if(timeout.is_timeout()){ transaction.commit(); RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);  }
 
         // Retrieve the external node ids
-        //auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
-        auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
+        auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
+        //auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
         transaction.commit(); // read-only transaction, abort == commit
         if(timeout.is_timeout()){ RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
 

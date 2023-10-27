@@ -138,7 +138,7 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
                 t_local.start();
                 interface->bfs(m_properties.bfs.m_source_vertex, path_result);
                 t_local.stop();
-               // LOG(">> BFS Execution time: " << t_local);
+              //  LOG(">> BFS Execution time: " << t_local);
                 m_exec_bfs.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){
@@ -173,7 +173,7 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
                 t_local.start();
                 interface->cdlp(m_properties.cdlp.m_max_iterations, path_result);
                 t_local.stop();
-               // LOG(">> CDLP Execution time: " << t_local);
+              // LOG(">> CDLP Execution time: " << t_local);
                 m_exec_cdlp.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){
@@ -207,7 +207,7 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
                 t_local.start();
                 interface->lcc(path_result);
                 t_local.stop();
-                LOG(">> LCC Execution time: " << t_local);
+               // LOG(">> LCC Execution time: " << t_local);
                 m_exec_lcc.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){
@@ -241,7 +241,7 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
                 t_local.start();
                 interface->pagerank(m_properties.pagerank.m_num_iterations, m_properties.pagerank.m_damping_factor, path_result);
                 t_local.stop();
-              //  LOG(">> PageRank Execution time: " << t_local);
+               // LOG(">> PageRank Execution time: " << t_local);
                 m_exec_pagerank.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){
@@ -308,7 +308,7 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
                 t_local.start();
                 interface->wcc(path_result);
                 t_local.stop();
-              //  LOG(">> WCC Execution time: " << t_local);
+               // LOG(">> WCC Execution time: " << t_local);
                 m_exec_wcc.push_back(t_local.microseconds());
 
                 if(m_validate_output_enabled){
