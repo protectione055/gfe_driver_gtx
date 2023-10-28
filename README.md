@@ -9,7 +9,7 @@ the [Graphalytics kernels](https://github.com/ldbc/ldbc_graphalytics) concurrent
 The driver supports the following systems: [Bw-Graph](https://anonymous.4open.science/r/BwGraph_v2-B9AC/README.md), [Sortledton](https://gitlab.db.in.tum.de/per.fuchs/sortledton), [Teseo](https://github.com/cwida/teseo), 
 [LLAMA](https://github.com/goatdb/llama), [GraphOne](https://github.com/the-data-lab/GraphOne), 
 [Stinger](http://stingergraph.com/) and [LiveGraph](https://github.com/thu-pacman/LiveGraph-Binary) while we ran our experiments only for systems that support concurrent reads and writes under transactions (Bw-Graph, Sortledton, Teseo, and LiveGraph).
-It can run four kinds experiments: insert all edges in a random permuted order or timestamp-based order from an input graph, execute the updates specified by a [graphlog file](https://github.com/whatsthecraic/graphlog), run the kernels of the Graphalytics suite: BFS, PageRank (PR), weighted shortest paths (SSSP), and concurrently execute updates and graph analytics.  
+It can run four kinds of experiments: insert all edges in a random permuted order or timestamp-based order from an input graph, execute the updates specified by a [graphlog file](https://github.com/whatsthecraic/graphlog), run the kernels of the Graphalytics suite: BFS, PageRank (PR), weighted shortest paths (SSSP), and concurrently execute updates and graph analytics.  
 In our paper we reported all insert experiments, all update experiments, and read-write mixed workload experiment. We also ran Graphalytics experiment but due to space we did not present the results in our papaer.
 ### Build 
 
