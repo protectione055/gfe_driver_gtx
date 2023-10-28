@@ -44,7 +44,7 @@ Instead, it is safer to reconfigure and rebuild the driver each time for a singl
 Download the source code from the [official repository](https://github.com/thu-pacman/LiveGraph). 
 In the paper, we evaluated version `eea5a40ce6ee443f901e44323c1119f59113eaf3`.
 Then build the LiveGraph library.
-Then configure the driver by pointing the path to where the library has been built:
+After the library is built, configure the driver by pointing the path to where the library has been built:
 
 ```
 mkdir build && cd build
@@ -87,7 +87,7 @@ mkdir build && cd build
 
 #### Bw-Graph
 Currently we use the version on Anonymous GitHub at `https://anonymous.4open.science/r/BwGraph_v2-B9AC/README.md`. 
-Follow the instruction in REAME to build Bw-Graph library. Then configure the driver with:
+Follow the instruction in REAME to build Bw-Graph library. After the library has been built, configure the driver with:
 ```
 mkdir build && cd build
 ../configure --enable-optimize --disable-debug --with-bwgraph=/path/to/Bw-Graph/build
@@ -118,28 +118,33 @@ A complete image of all datasets used in the experiments can be downloaded from 
 ### Executing the driver
 
 
-The driver takes as input a list of options together with a graph, and emits the results into a sqlite3 database. It also prints out the result like execution time and memory consumption.
+The driver takes as input a list of options together with a graph, and emits the results into a sqlite3 database. It also prints out the results to console.
 There are four kinds of experiments that can be executed:
 
-- **Insertions only**: insert all vertices and edges from an input graph, in a random order. Use the command:
+- **Insertions only**: insert all vertices and edges from an input graph:
 
+Insert in a random order:
 ```
-./gfe_driver -G /path/to/input/graph.properties -u -l <system_to_evaluate> -w <num_threads> -d output_results.sqlite3
+./gfe_driver -G /path/to/input/graph.properties -u -l <system_to_evaluate> -w <num_threads> -d output_results.sqlite3 --is_timestamped true
+```
+Insert in a timestamp-based order:
+```
+./gfe_driver -G /path/to/input/graph.el -u -l <system_to_evaluate> -w <num_threads> -d output_results.sqlite3
 ```
 
-- **Updates**: perform all insertions and deletions from a log. Add the option --log /path/to/updates.graphlog :
+- **Updates**: perform all insertions and deletions from a log. Add the option --log /path/to/updates.graphlog:
 
 ```
 ./gfe_driver -G /path/to/input/graph.properties -u --log /path/to/updates.graphlog --aging_timeout 24h -l <system_to_evaluate> -w <num_threads> -d output_results.sqlite3
 ```
 
-- **Graphalytics**: execute the six kernels from the Graphalytics suite. Add the option `-R <N>` to repeat `N` times the execution of all Graphalytics kernels, one after the other. E.g., to run the kernels five times, after all vertices and edges have been inserted, use:
+- **Graphalytics**: execute kernels from the Graphalytics suite. Add the option `-R <N>` to repeat `N` times the execution of all Graphalytics kernels, one after the other. E.g., to run the BFS five times, after all vertices and edges have been inserted, use:
 
 ```
-./gfe_driver -G /path/to/input/graph.properties -u -l <system_to_evaluate> -w <num_threads> -R 5 -d output_results.sqlite3
+./gfe_driver -G /path/to/input/graph.properties -u -l <system_to_evaluate> -w <num_threads> -R 5 -d output_results.sqlite3 --blacklist sssp,cdlp,wcc,pagerank,lcc
 ```
 
-- **Concurrent read-write mixed**: execute the update experiment and concurrently execute the graph analytics. We currently support concurrent graph topology scan, graph property scan, BFS, and PageRank. We subsitute CDLP and WCC with graph topology scan and property scan.
+- **Concurrent read-write mixed**: execute the updates experiment and concurrently run graph analytics. We currently support concurrent graph topology scan, graph property scan, BFS, and PageRank. We subsitute CDLP and WCC with graph topology scan and property scan. For example, to execute logs and concurrently run PageRank, run:
 
 ```
 ./gfe_driver -G /path/to/input/graph.properties  -R 3 -u --log /path/to/updates.graphlog --aging_timeout 24h -l <system_to_evaluate> -w <num_threads> -r <num_reader_threads> --blacklist sssp,cdlp,bfs,wcc,lcc --mixed_workload true
@@ -149,7 +154,7 @@ Type `./gfe_driver -h` for the full list of options and for the libraries that c
 in the library codes (e.g. teseo.**6**, stinger**3**) are unrelated to the versions of the systems evaluated, they were only used
 internally for development purposes.
 
-The database `output_results.sqlite3` will contain the final results. Refer to [this repository](https://github.com/whatsthecraic/gfe_notebooks) to see how to load and inspect the data within Jupyter notebooks. In our paper, we did not use the notebook but generated the figures directly from the experiment output.
+The database `output_results.sqlite3` will contain the final results. Refer to [this repository](https://github.com/whatsthecraic/gfe_notebooks) to see how to load and inspect the data within Jupyter notebooks. In our paper  "Bw-Graph: A  Write-Optimized Lock-free Graph System with Transactional Support", we did not use the notebook but generated the figures directly from the experiment output.
 All scripts of running the experiments mentioned in the paper can be found at [/scripts/] . We also implemented a mixed workload of updates and transactional single edge reads but did not include it in the paper. It is implemented as a variance of the update experiment and can be found at [/experiment/details/].
 
 
