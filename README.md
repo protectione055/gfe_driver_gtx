@@ -24,7 +24,6 @@ In our paper we reported all insert experiments, all update experiments, and mix
 - [libpapi 5.5 +](http://icl.utk.edu/papi/)
 - [SQLite 3.27 +](https://sqlite.org)
 - Intel Threading Building Blocks 2 (version 2020.1-2)
-- Disable NUMA balancing feature to avoid the Linux Kernel to swap pages during insertions: `echo 0 | sudo tee  /proc/sys/kernel/numa_balancing`
 
 #### Configure
 Clone the repository.
@@ -232,7 +231,7 @@ internally for development purposes.
 
 The database `output_results.sqlite3` will contain the final results. Refer to [this repository](https://github.com/whatsthecraic/gfe_notebooks) to see how to load and inspect the data within Jupyter notebooks. In our paper, We did not use the notebook but generated the figures directly from the experiment output.
 
-The full command of running the experiments mentioned in the paper can be found at /scripts/ . We also implemented a mixed workload of updates and transactional single edge reads but did not include it in the paper. It is implemented as a variance of the update experiment and can be found at /experiment/details/.
+The full command of running the experiments mentioned in the paper can be found at [/scripts/] . We also implemented a mixed workload of updates and transactional single edge reads but did not include it in the paper. It is implemented as a variance of the update experiment and can be found at [/experiment/details/].
 
 
 
