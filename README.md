@@ -138,10 +138,10 @@ Insert in a timestamp-based order:
 ./gfe_driver -G /path/to/input/graph.properties -u --log /path/to/updates.graphlog --aging_timeout 24h -l <system_to_evaluate> -w <num_threads> -d output_results.sqlite3
 ```
 
-- **Graphalytics**: execute kernels from the Graphalytics suite. Add the option `-R <N>` to repeat `N` times the execution of all Graphalytics kernels, one after the other. E.g., to run the BFS five times, after all vertices and edges have been inserted, use:
+- **Graphalytics**: execute kernels from the Graphalytics suite. Add the option `-R <N>` to repeat `N` times the execution of Graphalytics kernel(s). E.g., to run the BFS and PageRank five times, after all vertices and edges have been inserted, use:
 
 ```
-./gfe_driver -G /path/to/input/graph.properties -u -l <system_to_evaluate> -w <num_threads> -R 5 -d output_results.sqlite3 --blacklist sssp,cdlp,wcc,pagerank,lcc
+./gfe_driver -G /path/to/input/graph.properties -u -l <system_to_evaluate> -w <num_threads> -R 5 -d output_results.sqlite3 --blacklist sssp,cdlp,wcc,lcc
 ```
 
 - **Concurrent read-write mixed**: execute the updates experiment and concurrently run graph analytics. We currently support concurrent graph topology scan, graph property scan, BFS, and PageRank. We subsitute CDLP and WCC with graph topology scan and property scan. For example, to execute updates from logs and concurrently run PageRank, run:
