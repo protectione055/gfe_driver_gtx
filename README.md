@@ -87,7 +87,7 @@ mkdir build && cd build
 
 #### Bw-Graph
 Currently use the version on Anonymous GitHub at `https://anonymous.4open.science/r/BwGraph_v2-B9AC/README.md`. 
-Following the built instruction in its REAME to build Bw-Graph library. Then configure the driver with:
+Follow the instruction in REAME to build Bw-Graph library. Then configure the driver with:
 ```
 mkdir build && cd build
 ../configure --enable-optimize --disable-debug --with-bwgraph=/path/to/Bw-Graph/build
