@@ -144,7 +144,7 @@ Insert in a timestamp-based order:
 ./gfe_driver -G /path/to/input/graph.properties -u -l <system_to_evaluate> -w <num_threads> -R 5 -d output_results.sqlite3 --blacklist sssp,cdlp,wcc,pagerank,lcc
 ```
 
-- **Concurrent read-write mixed**: execute the updates experiment and concurrently run graph analytics. We currently support concurrent graph topology scan, graph property scan, BFS, and PageRank. We subsitute CDLP and WCC with graph topology scan and property scan. For example, to execute logs and concurrently run PageRank, run:
+- **Concurrent read-write mixed**: execute the updates experiment and concurrently run graph analytics. We currently support concurrent graph topology scan, graph property scan, BFS, and PageRank. We subsitute CDLP and WCC with graph topology scan and property scan. For example, to execute updates from logs and concurrently run PageRank, run:
 
 ```
 ./gfe_driver -G /path/to/input/graph.properties  -R 3 -u --log /path/to/updates.graphlog --aging_timeout 24h -l <system_to_evaluate> -w <num_threads> -r <num_reader_threads> --blacklist sssp,cdlp,bfs,wcc,lcc --mixed_workload true
