@@ -44,11 +44,11 @@ Instead, it is safer to reconfigure and rebuild the driver each time for a singl
 Download the source code from the [official repository](https://github.com/thu-pacman/LiveGraph). 
 In the paper, we evaluated version `eea5a40ce6ee443f901e44323c1119f59113eaf3`.
 Build the LiveGraph library.
-Then configure the driver by pointing the path to where the library has been downloading:
+Then configure the driver by pointing the path to where the library has been built:
 
 ```
 mkdir build && cd build
-../configure --enable-optimize --disable-debug --with-livegraph=/path/to/livegraph/lib
+../configure --enable-optimize --disable-debug --with-livegraph=/path/to/livegraph/build
 ```
 
 ##### Teseo
