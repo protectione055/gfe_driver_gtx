@@ -1,5 +1,5 @@
 
-Our version of GFE_Driver is developed on top of the original GFE_Driver (https://github.com/cwida/gfe_driver) and modified GFE_Driver (https://github.com/PerFuchs/gfe_driver/tree/master) used to evaluate previous works.
+Our version of GFE_Driver is developed on top of the original GFE_Driver (https://github.com/cwida/gfe_driver) and modified GFE_Driver (https://github.com/PerFuchs/gfe_driver/tree/master) that are used to evaluate previous works.
 
 GFE Driver
 ---
@@ -43,7 +43,7 @@ Instead, it is safer to reconfigure and rebuild the driver each time for a singl
 
 Download the source code from the [official repository](https://github.com/thu-pacman/LiveGraph). 
 In the paper, we evaluated version `eea5a40ce6ee443f901e44323c1119f59113eaf3`.
-Build the LiveGraph library.
+Then build the LiveGraph library.
 Then configure the driver by pointing the path to where the library has been built:
 
 ```
@@ -86,7 +86,7 @@ mkdir build && cd build
 ```
 
 #### Bw-Graph
-Currently use the version on Anonymous GitHub at `https://anonymous.4open.science/r/BwGraph_v2-B9AC/README.md`. 
+Currently we use the version on Anonymous GitHub at `https://anonymous.4open.science/r/BwGraph_v2-B9AC/README.md`. 
 Follow the instruction in REAME to build Bw-Graph library. Then configure the driver with:
 ```
 mkdir build && cd build
@@ -105,7 +105,7 @@ If in the mood of running the testsuite, type `make check -j`.
 
 In our experiments, we used the following input graphs and data sets:
 
-- `dota-league` and `graph500-SF`, with `SF` in {22, 24 26} and `com-friendster`, were taken from the [official Graphalytics collection](https://www.graphalytics.org/datasets).
+- `dota-league` and `graph500-SF`, with `SF` in {22, 24, 26} and `com-friendster`, were taken from the [official Graphalytics collection](https://www.graphalytics.org/datasets).
 - `uniform-SF`, with `SF` in {22, 24, 26} were generated with an [ad-hoc tool](https://github.com/whatsthecraic/uniform_graph_generator). These are synthetic graphs having the same number of vertices and edges of `graph500-SF`, but a uniform node degree distribution.
 - The logs for the experiments with updates, i.e. with both insertions and deletions,
   were generated with another [ad-hoc tool](https://github.com/whatsthecraic/graphlog). 

@@ -1,7 +1,3 @@
-//
-// Created by zhou822 on 8/6/23.
-//
-
 #include "update_short_reads_experiment.hpp"
 #include <iostream>
 #include <mutex>
