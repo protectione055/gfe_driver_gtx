@@ -127,8 +127,6 @@ There are four kinds of experiments that can be executed:
 ./gfe_driver -G /path/to/input/graph.properties -u -l <system_to_evaluate> -w <num_threads> -d output_results.sqlite3
 ```
 
-For LLAMA only: add the option `--build_frequency 10s` to asynchronously issue the creation of a new level (or delta) every 10 seconds.
-
 - **Updates**: perform all insertions and deletions from a log. Add the option --log /path/to/updates.graphlog :
 
 ```
@@ -141,7 +139,7 @@ For LLAMA only: add the option `--build_frequency 10s` to asynchronously issue t
 ./gfe_driver -G /path/to/input/graph.properties -u -l <system_to_evaluate> -w <num_threads> -R 5 -d output_results.sqlite3
 ```
 
-- **Concurrent read-write mixed**: execute the update experiment and after the source graph is loaded, concurrently execute the graph analytics. We currently support graph topology scan, graph property scan, BFS, and PageRank. 
+- **Concurrent read-write mixed**: execute the update experiment and concurrently execute the graph analytics. We currently support concurrent graph topology scan, graph property scan, BFS, and PageRank. We subsitute CDLP and WCC with graph topology scan and property scan.
 
 ```
 ./gfe_driver -G /path/to/input/graph.properties  -R 3 -u --log /path/to/updates.graphlog --aging_timeout 24h -l <system_to_evaluate> -w <num_threads> -r <num_reader_threads> --blacklist sssp,cdlp,bfs,wcc,lcc --mixed_workload true
@@ -151,9 +149,8 @@ Type `./gfe_driver -h` for the full list of options and for the libraries that c
 in the library codes (e.g. teseo.**6**, stinger**3**) are unrelated to the versions of the systems evaluated, they were only used
 internally for development purposes.
 
-The database `output_results.sqlite3` will contain the final results. Refer to [this repository](https://github.com/whatsthecraic/gfe_notebooks) to see how to load and inspect the data within Jupyter notebooks. In our paper, We did not use the notebook but generated the figures directly from the experiment output.
-
-The full command of running the experiments mentioned in the paper can be found at [/scripts/] . We also implemented a mixed workload of updates and transactional single edge reads but did not include it in the paper. It is implemented as a variance of the update experiment and can be found at [/experiment/details/].
+The database `output_results.sqlite3` will contain the final results. Refer to [this repository](https://github.com/whatsthecraic/gfe_notebooks) to see how to load and inspect the data within Jupyter notebooks. In our paper, we did not use the notebook but generated the figures directly from the experiment output.
+All scripts of running the experiments mentioned in the paper can be found at [/scripts/] . We also implemented a mixed workload of updates and transactional single edge reads but did not include it in the paper. It is implemented as a variance of the update experiment and can be found at [/experiment/details/].
 
 
 
