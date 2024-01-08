@@ -288,8 +288,8 @@ namespace gfe::library {
                 string_view weight { (char*) &edge.m_weight, sizeof(edge.m_weight) };
                 //string weight = "weight";//todo:: change this back
                 //tx.put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
-                result = tx.checked_put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
-
+                //result = tx.checked_put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
+                result = tx.checked_single_put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
                 if(!m_is_directed&&result){
                     // a) In directed graphs, we register the incoming edges with label 1
                     // b) In undirected graphs, we follow the same convention given by G. Feng, author
@@ -297,7 +297,8 @@ namespace gfe::library {
                     // undirected edges are added twice as a -> b and b -> a
                     //bg::label_t label = 1;
                     //tx.put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
-                    result&=tx.checked_put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
+                    //result&=tx.checked_put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
+                    result&=tx.checked_single_put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
                 }
                 if(tx.commit()){
                     if(result)
@@ -524,15 +525,18 @@ namespace gfe::library {
                 //if(/*removed &&*/ !m_is_directed){ // undirected graph
                 //    tx.delete_edge(internal_destination_id, /* label */ 1, internal_source_id);
                 //}
-                bool removed = tx.checked_delete_edge(internal_source_id, /* label */ 1, internal_destination_id);
+                //bool removed = tx.checked_delete_edge(internal_source_id, /* label */ 1, internal_destination_id);
+                bool removed = tx.checked_single_delete_edge(internal_source_id, /* label */ 1, internal_destination_id);
                 if(removed && !m_is_directed){ // undirected graph
-                    removed&=tx.checked_delete_edge(internal_destination_id, /* label */ 1, internal_source_id);
+                    //removed&=tx.checked_delete_edge(internal_destination_id, /* label */ 1, internal_source_id);
+                    removed&=tx.checked_single_delete_edge(internal_destination_id, /* label */ 1, internal_source_id);
                 }
                 if(tx.commit()){
                    if(removed){
                        m_num_edges--;
                        return true;
                    }else{
+                       //throw std::runtime_error("deletion should always delete an existing edge in this experiment");
                        return false;
                    }
                 }
@@ -1318,6 +1322,145 @@ updates in the pull direction to remove the need for atomics.
         return ptr_scores;
     }
     static
+    unique_ptr<double[]> do_pagerank_hybrid_it(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t num_iterations, double damping_factor, utility::TimeoutService& timer) {
+        const double init_score = 1.0 / num_vertices;
+        const double base_score = (1.0 - damping_factor) / num_vertices;
+
+        unique_ptr<double[]> ptr_scores{ new double[max_vertex_id]() }; // avoid memory leaks
+        unique_ptr<uint64_t[]> ptr_degrees{ new uint64_t[max_vertex_id]() }; // avoid memory leaks
+        double* scores = ptr_scores.get();
+        uint64_t* __restrict degrees = ptr_degrees.get();
+        auto graph = transaction.get_graph();
+
+#pragma omp parallel
+        {
+            uint8_t thread_ud = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_hybrid_edge_delta_iterator(thread_ud);
+#pragma omp for
+            for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                scores[v - 1] = init_score;
+
+                // compute the outdegree of the vertex
+                if (!transaction.get_vertex(v, thread_ud).empty()) { // check the vertex exists
+                    /*uint64_t degree = 0;
+                    //auto iterator = transaction.simple_get_edges(v, 1,thread_ud);
+                    transaction.simple_get_edges(v,1,thread_ud,iterator);
+                    while (iterator.valid()) {
+                        degree++; //iterator.next();
+                    }
+                    iterator.close();
+                    degrees[v - 1] = degree;*/
+                    
+                    transaction.hybrid_get_edges(v,1,thread_ud,iterator);
+                    degrees[v - 1] = iterator.neighborhood_size();
+                } else {
+                    degrees[v - 1] = numeric_limits<uint64_t>::max();
+                }
+            }
+            transaction.thread_on_openmp_section_finish(thread_ud);
+            iterator.close();
+        }
+        graph->on_openmp_section_finishing();
+        gapbs::pvector<double> outgoing_contrib(max_vertex_id, 0.0);
+        #if false
+        {
+            double dangling_sum = 0.0;
+
+            // for each node, precompute its contribution to all of its outgoing neighbours and, if it's a sink,
+            // add its rank to the `dangling sum' (to be added to all nodes).
+#pragma omp parallel for reduction(+:dangling_sum)
+            for(uint64_t v = 1; v <= max_vertex_id; v++){
+                uint64_t out_degree = degrees[v-1];
+                if(out_degree == numeric_limits<uint64_t>::max()){
+                    continue; // the vertex does not exist
+                } else if (out_degree == 0){ // this is a sink
+                    dangling_sum += scores[v-1];
+                } else {
+                    outgoing_contrib[v-1] = scores[v-1] / out_degree;
+                }
+            }
+
+            dangling_sum /= num_vertices;
+
+            // compute the new score for each node in the graph
+            //fixme: currently our txn does not support being executed by mutiple threads. It requires fetching thread_id for each operation execution from the table.
+//#pragma omp parallel for schedule(dynamic, 64)
+#pragma omp parallel
+            {
+                uint8_t thread_id = graph->get_openmp_worker_thread_id();
+                auto iterator = transaction.generate_edge_delta_iterator(thread_id);
+#pragma omp for schedule(dynamic, 64)
+                for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                    if (degrees[v-1] == numeric_limits<uint64_t>::max()) { continue; } // the vertex does not exist
+
+                    double incoming_total = 0;
+                    //auto iterator = transaction.simple_get_edges(v, /* label ? */1,thread_id); // fixme: incoming edges for directed graphs
+                    transaction.simple_get_edges(v, /* label ? */1,thread_id,iterator);
+                    while (iterator.valid()) {
+                        uint64_t u = iterator.dst_id();
+                        incoming_total += outgoing_contrib[u-1];
+                        //iterator.next();
+                    }
+                    iterator.close();
+                    // update the score
+                    scores[v-1] = base_score + damping_factor * (incoming_total + dangling_sum);
+                }
+                transaction.thread_on_openmp_section_finish(thread_id);
+            }
+            graph->on_openmp_section_finishing();
+        }
+        #endif
+        // pagerank iterations
+        for(uint64_t iteration = 0; iteration < num_iterations && !timer.is_timeout(); iteration++){
+            double dangling_sum = 0.0;
+
+            // for each node, precompute its contribution to all of its outgoing neighbours and, if it's a sink,
+            // add its rank to the `dangling sum' (to be added to all nodes).
+#pragma omp parallel for reduction(+:dangling_sum)
+            for(uint64_t v = 1; v <= max_vertex_id; v++){
+                uint64_t out_degree = degrees[v-1];
+                if(out_degree == numeric_limits<uint64_t>::max()){
+                    continue; // the vertex does not exist
+                } else if (out_degree == 0){ // this is a sink
+                    dangling_sum += scores[v-1];
+                } else {
+                    outgoing_contrib[v-1] = scores[v-1] / out_degree;
+                }
+            }
+
+            dangling_sum /= num_vertices;
+
+            // compute the new score for each node in the graph
+            //fixme: currently our txn does not support being executed by mutiple threads. It requires fetching thread_id for each operation execution from the table.
+//#pragma omp parallel for schedule(dynamic, 64)
+#pragma omp parallel
+            {
+                uint8_t thread_id = graph->get_openmp_worker_thread_id();
+                auto iterator = transaction.generate_hybrid_edge_delta_iterator(thread_id);
+#pragma omp for schedule(dynamic, 64)
+                for (uint64_t v = 1; v <= max_vertex_id; v++) {
+                    if (degrees[v-1] == numeric_limits<uint64_t>::max()) { continue; } // the vertex does not exist
+
+                    double incoming_total = 0;
+                    //auto iterator = transaction.simple_get_edges(v, /* label ? */1,thread_id); // fixme: incoming edges for directed graphs
+                    transaction.hybrid_get_edges(v, /* label ? */1,thread_id,iterator);
+                    while (iterator.valid()) {
+                        uint64_t u = iterator.dst_id();
+                        incoming_total += outgoing_contrib[u-1];
+                        //iterator.next();
+                    }
+                    iterator.close();
+                    // update the score
+                    scores[v-1] = base_score + damping_factor * (incoming_total + dangling_sum);
+                }
+                transaction.thread_on_openmp_section_finish(thread_id);
+            }
+            graph->on_openmp_section_finishing();
+        }
+
+        return ptr_scores;
+    }
+    static
     unique_ptr<double[]> do_static_pagerank(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t num_iterations, double damping_factor, utility::TimeoutService& timer) {
         const double init_score = 1.0 / num_vertices;
         const double base_score = (1.0 - damping_factor) / num_vertices;
@@ -1415,9 +1558,11 @@ updates in the pull direction to remove the need for atomics.
         bg::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
         uint64_t num_vertices = m_num_vertices;
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
-
+        auto handler =  BwGraph->get_pagerank_handler(num_vertices);
+        handler.compute(num_iterations,damping_factor);
         // Run the PageRank algorithm
-        unique_ptr<double[]> ptr_result = do_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
+        //unique_ptr<double[]> ptr_result = do_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
+        /*unique_ptr<double[]> ptr_result = do_pagerank_hybrid_it(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
         //unique_ptr<double[]> ptr_result = do_static_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
         if(timeout.is_timeout()){ transaction.commit(); RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);  }
 
@@ -1425,11 +1570,12 @@ updates in the pull direction to remove the need for atomics.
         auto external_ids = translate(&transaction, ptr_result.get(), max_vertex_id);
         //auto external_ids = static_translate(&transaction, ptr_result.get(), max_vertex_id);
         transaction.commit(); // read-only transaction, abort == commit
-        if(timeout.is_timeout()){ RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }
+        if(timeout.is_timeout()){ RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer); }*/
 
         // Store the results in the given file
         if(dump2file != nullptr)
-            save_results(external_ids, dump2file);
+            save_results(*handler.get_result(),dump2file);
+            //save_results(external_ids, dump2file);
     }
 /*****************************************************************************
  *                                                                           *

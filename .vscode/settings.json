@@ -23,7 +23,8 @@
         "*.ipp": "cpp",
         "*.tcc": "cpp",
         "fstream": "cpp",
-        "iterator": "cpp"
+        "iterator": "cpp",
+        "ratio": "cpp"
     },
     "cmake.sourceDirectory": "/home/zhou822/gfe_driver_bigdata/third-party/googletest"
 }
