@@ -273,7 +273,9 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
             const char* path_result = m_validate_output_enabled ? path_tmp.c_str() : nullptr;
             try {
                 t_local.start();
-                interface->sssp(m_properties.sssp.m_source_vertex, path_result);
+                //std::cout<<"executing sssp from "<<m_properties.sssp.m_source_vertex<<std::endl;
+                interface->sssp(2592222, path_result);
+                //interface->sssp(m_properties.sssp.m_source_vertex, path_result);//2592222
                 t_local.stop();
                 //LOG(">> SSSP Execution time: " << t_local);
                 m_exec_sssp.push_back(t_local.microseconds());
@@ -281,7 +283,7 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
                 if(m_validate_output_enabled){
                     string path_reference = get_validation_path("SSSP");
                     if(common::filesystem::exists(path_reference)){
-                        GraphalyticsValidate::sssp(path_tmp, path_reference, max_num_errors, get_validation_map());
+                        GraphalyticsValidate::sssp(path_tmp, path_reference, max_num_errors, get_validation_map());//2592222
                         LOG(">> Validation succeeded");
                         m_validate_results.emplace_back("sssp", ValidationResult::SUCCEEDED);
                         std::filesystem::remove(path_tmp);

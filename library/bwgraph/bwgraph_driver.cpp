@@ -44,7 +44,7 @@ using vertex_dictionary_t = tbb::concurrent_hash_map<uint64_t, bg::vertex_t>;
 namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
 #define COUT_DEBUG_FORCE(msg) { std::scoped_lock<std::mutex> lock{::gfe::_log_mutex}; std::cout << "[BwGraphDriver::" << __FUNCTION__ << "] [Thread #" << common::concurrency::get_thread_id() << "] " << msg << std::endl; }
 #if defined(DEBUG)
-#define COUT_DEBUG(msg) COUT_DEBUG_FORCE(msg)
+//#define COUT_DEBUG(msg) COUT_DEBUG_FORCE(msg)
 #else
 #define COUT_DEBUG(msg)
 #endif
@@ -122,7 +122,10 @@ namespace gfe::library {
         if ( VertexDictionary->find(accessor, external_vertex_id ) ){
             return accessor->second;
         } else {
-            ERROR("The given vertex does not exist: " << external_vertex_id);
+            std::cout<<"unable to find the vertex "<<external_vertex_id<<std::endl;
+            //ERROR("The given vertex does not exist: " << external_vertex_id);
+            throw std::runtime_error("force crash");
+            return 0;
         }
     }
     //todo: check what should we do to support both read only and rw transaction here
@@ -918,7 +921,44 @@ namespace gfe::library {
         }
         queue.slide_window();
     }
-
+    static
+    unique_ptr<int64_t[]> do_bfs_init_distances_init_edge_num(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t& edge_num){
+        unique_ptr<int64_t[]> distances{ new int64_t[max_vertex_id] };
+        //reset thread ID's
+        auto graph = transaction.get_graph();
+        std::atomic_uint64_t total_num = 0;
+        //graph->on_openmp_section_finishing();
+#pragma omp parallel
+        {
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.generate_edge_delta_iterator(thread_id);
+            uint64_t local_num = 0;
+#pragma omp for
+            for (uint64_t n = 1; n <= max_vertex_id; n++) {
+                if (transaction.get_vertex(n, thread_id).empty()) { // the vertex does not exist
+                    distances[n - 1] = numeric_limits<int64_t>::max();
+                } else { // the vertex exists
+                    // Retrieve the out degree for the vertex n
+                    /*uint64_t out_degree = 0;
+                    auto iterator = transaction.simple_get_edges(n,  1, thread_id);
+                    while (iterator.valid()) {
+                        out_degree++;
+                        // iterator.next();
+                    }
+                    iterator.close();*/
+                    transaction.simple_get_edges(n,1,thread_id,iterator);
+                    uint64_t out_degree = iterator.get_vertex_degree();
+                    local_num+= out_degree;
+                    distances[n - 1] = out_degree != 0 ? -out_degree : -1;
+                }
+            }
+            total_num.fetch_add(local_num,std::memory_order_acq_rel);
+            transaction.thread_on_openmp_section_finish(thread_id);
+        }
+        edge_num = total_num.load(std::memory_order_relaxed)/2;
+        graph->on_openmp_section_finishing();
+        return distances;
+    }
     static
     unique_ptr<int64_t[]> do_bfs_init_distances(bg::SharedROTransaction& transaction, uint64_t max_vertex_id) {
         unique_ptr<int64_t[]> distances{ new int64_t[max_vertex_id] };
@@ -980,6 +1020,63 @@ namespace gfe::library {
             }
         }
         return distances;
+    }
+    static
+    unique_ptr<int64_t[]> do_bfs(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
+        // The implementation from GAP BS reports the parent (which indeed it should make more sense), while the one required by
+        // Graphalytics only returns the distance
+        //transaction.print_debug_info();
+       // std::cout<<"correct bfs"<<std::endl;
+       int64_t edges_to_check = 0;
+        unique_ptr<int64_t[]> ptr_distances = do_bfs_init_distances_init_edge_num(transaction,max_vertex_id,edges_to_check);//do_bfs_init_distances(transaction, max_vertex_id);
+        int64_t* __restrict distances = ptr_distances.get();
+        distances[root-1] = 0;
+
+        gapbs::SlidingQueue<int64_t> queue(max_vertex_id);
+        queue.push_back(root);
+        queue.slide_window();
+        gapbs::Bitmap curr(max_vertex_id);
+        curr.reset();
+        gapbs::Bitmap front(max_vertex_id);
+        front.reset();
+        //int64_t edges_to_check = num_edges; //g.num_edges_directed();
+
+        int64_t scout_count = 0;
+        { // retrieve the out degree of the root
+            auto graph = transaction.get_graph();
+            uint8_t thread_id = graph->get_openmp_worker_thread_id();
+            auto iterator = transaction.simple_get_edges(root, 1,thread_id);
+            /*while(iterator.valid()){ scout_count++; //iterator.next();
+             }
+            iterator.close();*/
+            scout_count = iterator.get_vertex_degree();
+            graph->on_openmp_section_finishing();
+        }
+        int64_t distance = 1; // current distance
+        while (!timer.is_timeout() && !queue.empty()) {
+
+            if (scout_count > edges_to_check / alpha) {
+                int64_t awake_count, old_awake_count;
+                do_bfs_QueueToBitmap(transaction, max_vertex_id, queue, front);
+                awake_count = queue.size();
+                queue.slide_window();
+                do {
+                    old_awake_count = awake_count;
+                    awake_count = do_bfs_BUStep(transaction, max_vertex_id, distances, distance, front, curr);
+                    front.swap(curr);
+                    distance++;
+                } while ((awake_count >= old_awake_count) || (awake_count > (int64_t) num_vertices / beta));
+                do_bfs_BitmapToQueue(transaction, max_vertex_id, front, queue);
+                scout_count = 1;
+            } else {
+                edges_to_check -= scout_count;
+                scout_count = do_bfs_TDStep(transaction, max_vertex_id, distances, distance, queue);
+                queue.slide_window();
+                distance++;
+            }
+        }
+
+        return ptr_distances;
     }
     static
     unique_ptr<int64_t[]> do_bfs(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t num_edges, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
@@ -1089,23 +1186,27 @@ namespace gfe::library {
         return ptr_distances;
     }
     void BwGraphDriver::bfs(uint64_t external_source_id, const char* dump2file) {
+        //std::cout<<"from source "<<external_source_id<<std::endl;
         if(m_is_directed) { ERROR("This implementation of the BFS does not support directed graphs"); }
 
         // Init
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
         bg::SharedROTransaction transaction =  BwGraph->begin_shared_read_only_transaction();
-       // BwGraph->on_openmp_txn_start(transaction.get_read_timestamp());
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
         uint64_t num_vertices = m_num_vertices;
-        uint64_t num_edges = m_num_edges;
+        //uint64_t num_edges = m_num_edges;
         //transaction.print_debug_info();
         uint64_t root = ext2int(external_source_id);
-        COUT_DEBUG_BFS("root: " << root << " [external vertex: " << external_source_id << "]");
+        //COUT_DEBUG_BFS("root: " << root << " [external vertex: " << external_source_id << "]");
+        /*auto handler =  BwGraph->get_bfs_handler(num_vertices);
+        handler.compute(root);
+        if(dump2file != nullptr)
+            save_results<int64_t, false>(*handler.get_result(),dump2file);*/
         //Timer t;
         //t.start();
         // Run the BFS algorithm
-        unique_ptr<int64_t[]> ptr_result = do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
+        unique_ptr<int64_t[]> ptr_result = do_bfs(transaction, num_vertices /*, num_edges*/, max_vertex_id, root, timeout);
         //unique_ptr<int64_t[]> ptr_result = static_do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
         //cout << "BFS took " << t << endl;
         if(timeout.is_timeout()){
@@ -1414,11 +1515,20 @@ updates in the pull direction to remove the need for atomics.
         Timer timer; timer.start();
         bg::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
         uint64_t num_vertices = m_num_vertices;
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        //reuse data structures
+       /*auto result = BwGraph->compute_pagerank(num_vertices,num_iterations,damping_factor);
+        if(dump2file != nullptr)
+            save_results(*result,dump2file);*/
+        //direct access method
+        auto handler =  BwGraph->get_pagerank_handler(num_vertices);
+        handler.compute(num_iterations,damping_factor);
+        if(dump2file != nullptr)
+            save_results(*handler.get_result(),dump2file);
 
+        /*uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
         // Run the PageRank algorithm
         unique_ptr<double[]> ptr_result = do_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
-        //unique_ptr<double[]> ptr_result = do_static_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
+        //unique_ptr<double[]> ptr_result = do_sstatic_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
         if(timeout.is_timeout()){ transaction.commit(); RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);  }
 
         // Retrieve the external node ids
@@ -1429,7 +1539,7 @@ updates in the pull direction to remove the need for atomics.
 
         // Store the results in the given file
         if(dump2file != nullptr)
-            save_results(external_ids, dump2file);
+            save_results(external_ids, dump2file);*/
     }
 /*****************************************************************************
  *                                                                           *
@@ -2107,7 +2217,18 @@ more consistent performance for undirected graphs.
     }
 
     void BwGraphDriver::sssp(uint64_t source_vertex_id, const char* dump2file) {
-        utility::TimeoutService timeout { m_timeout };
+        //std::cout<<"sssp running"<<std::endl;
+        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        uint64_t root = ext2int(source_vertex_id);
+        //uint64_t root = 128;
+       auto handler = BwGraph->get_sssp_handler(max_vertex_id);
+        double delta = 2.0;
+        //std::cout<<"before entering compute"<<std::endl;
+        handler.compute(root,delta);
+        if(dump2file != nullptr)
+            save_results<double, false>(*handler.get_result(),dump2file);
+        //std::cout<<"sssp ran"<<std::endl;
+       /*utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
         bg::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
         uint64_t num_edges = m_num_edges;
@@ -2128,6 +2249,7 @@ more consistent performance for undirected graphs.
 
         // Store the results in the given file
         if(dump2file != nullptr)
-            save_results(external_ids, dump2file);
+            save_results(external_ids, dump2file);*/
+        //std::cout<<"sssp ran"<<std::endl;
     }
 }//namespace gfe::library
