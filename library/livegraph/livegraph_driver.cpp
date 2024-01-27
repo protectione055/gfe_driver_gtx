@@ -1022,6 +1022,27 @@ void LiveGraphDriver::wcc(const char* dump2file) {
     do_weight_scan(transaction,max_vertex_id);
 }
 
+static uint64_t total_edge_count(lg::Transaction& transaction, uint64_t max_vertex_id){
+    uint64_t total_edge_num = 0;
+#pragma omp parallel
+        {
+        uint64_t local_degree = 0;
+#pragma omp for
+        for(uint64_t v=0; v<max_vertex_id;v++){
+            auto iterator = transaction.get_edges(v, /* label ? */ 0); // fixme: incoming edges for directed graphs
+            while(iterator.valid()){
+                uint64_t u = iterator.dst_id();
+                local_degree++;
+                iterator.next();
+            }
+        }
+#pragma omp critical
+        {
+                total_edge_num += local_degree;
+        }
+    }
+        return total_edge_num/2;
+}
 
 static void do_topology_scan(lg::Transaction& transaction, uint64_t max_vertex_id){
     uint64_t total_edge_num = 0;
@@ -1397,8 +1418,9 @@ void LiveGraphDriver::sssp(uint64_t source_vertex_id, const char* dump2file) {
     utility::TimeoutService timeout { m_timeout };
     Timer timer; timer.start();
     lg::Transaction transaction = m_read_only ? LiveGraph->begin_read_only_transaction() : LiveGraph->begin_transaction();
-    uint64_t num_edges = m_num_edges;
-    uint64_t max_vertex_id = LiveGraph->get_max_vertex_id();
+     uint64_t max_vertex_id = LiveGraph->get_max_vertex_id();
+    //uint64_t num_edges = m_num_edges;
+    uint64_t num_edges = total_edge_count(transaction,max_vertex_id);
     uint64_t root = ext2int(source_vertex_id);
 
     // Run the SSSP algorithm
