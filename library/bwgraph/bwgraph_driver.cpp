@@ -1841,11 +1841,41 @@ more consistent performance for undirected graphs.
         std::cout<<"total vid sum is "<<total_vid_sum<<std::endl;
     }
     
+    void BwGraphDriver::generate_two_hops_neighbor_candidates(std::vector<uint64_t>&vertices){
+        vertices.resize(two_hop_neighbor_size);
+        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        std::unordered_set<uint64_t> unique_vertices;
+        for(uint64_t i=0; i<two_hop_neighbor_size;i++){
+            uint64_t vid = rand()%max_vertex_id+1;
+            auto result = unique_vertices.emplace(vid);
+            if(result.second){
+                vertices[i]=vid;
+            }else{
+                i--;
+            }
+        }
+    }
+    void BwGraphDriver::one_hop_neighbors(std::vector<uint64_t>&vertices){
+        auto handler = BwGraph->get_one_hop_neighbors_handler();
+        handler.compute(vertices);
+    }
+
+    void BwGraphDriver::two_hop_neighbors(std::vector<uint64_t>&vertices){
+        auto handler = BwGraph->get_two_hop_neighbors_handler();
+        handler.compute(vertices);
+    }
     //todo:: fix iterator
     void BwGraphDriver::cdlp(uint64_t max_iterations, const char* dump2file) {
-        auto transaction =BwGraph->begin_shared_read_only_transaction();
+         /*std::vector<uint64_t> vertices(two_hop_neighbor_size);
+         std::unordered_set<uint64_t> unique_vertices;
+         for(uint64_t i=0; i<two_hop_neighbor_size; i++){
+            vertices[i]= rand()%max_vertex_id+1;
+         }
+         auto handler = BwGraph->get_two_hop_neighbors_handler();
+         handler.compute(vertices);*/
+        /*auto transaction =BwGraph->begin_shared_read_only_transaction();
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
-        do_topology_scan(transaction,max_vertex_id);
+        do_topology_scan(transaction,max_vertex_id);*/
      /*   if(m_is_directed) { ERROR("This implementation of the CDLP does not support directed graphs"); }
 
         utility::TimeoutService timeout { m_timeout };

@@ -183,6 +183,11 @@ public:
      * @param dump2file if not null, dump the result in the given path, following the format expected by the benchmark specification
      */
     virtual void sssp(uint64_t source_vertex_id, const char* dump2file = nullptr);
+
+    //Libin added those
+    virtual void generate_two_hops_neighbor_candidates(std::vector<uint64_t>&vertices);
+    virtual void one_hop_neighbors(std::vector<uint64_t>&vertices);
+    virtual void two_hop_neighbors(std::vector<uint64_t>&vertices);
 };
 
 } // namespace

@@ -1438,4 +1438,81 @@ void LiveGraphDriver::sssp(uint64_t source_vertex_id, const char* dump2file) {
         save_results(external_ids, dump2file);
 }
 
+void LiveGraphDriver::generate_two_hops_neighbor_candidates(std::vector<uint64_t>&vertices){
+    uint64_t max_vertex_id = LiveGraph->get_max_vertex_id();
+     vertices.resize(two_hop_neighbor_size);
+      std::unordered_set<uint64_t> unique_vertices;
+    for (uint64_t i = 0; i < two_hop_neighbor_size; i++)
+    {
+      uint64_t vid = rand() % max_vertex_id;
+      auto result = unique_vertices.emplace(vid);
+      if (result.second)
+      {
+        vertices[i] = vid;
+      }
+      else
+      {
+        i--;
+      }
+    }
+}
+
+void LiveGraphDriver::one_hop_neighbors(std::vector<uint64_t>&vertices){
+    auto transaction = m_read_only ?  LiveGraph->begin_read_only_transaction() : LiveGraph->begin_transaction();
+    std::unordered_map<uint64_t, std::vector<uint64_t>> results;
+    results.reserve(two_hop_neighbor_size);
+    for (auto source : vertices)
+    {
+      results[source];
+    }
+    #pragma omp parallel for
+      for (auto source : vertices)
+      {
+        auto& neighbors = results[source];
+        //scan source's neighbors
+        auto iterator = transaction.get_edges(source, /* label ? */ 0); // fixme: incoming edges for directed graphs
+        while(iterator.valid()){
+                //uint64_t u = iterator.dst_id();
+                neighbors.emplace_back(iterator.dst_id());
+                iterator.next();
+        }
+      }
+      //omp for finished
+}
+
+void LiveGraphDriver::two_hop_neighbors(std::vector<uint64_t>&vertices){
+    auto transaction = m_read_only ?  LiveGraph->begin_read_only_transaction() : LiveGraph->begin_transaction();
+    std::unordered_map<uint64_t, std::vector<uint64_t>> results;
+    results.reserve(two_hop_neighbor_size);
+    for (auto source : vertices)
+    {
+      results[source];
+    }
+    #pragma omp parallel for
+      for (auto source : vertices)
+      {
+        auto& neighbors = results[source];
+        std::vector<uint64_t> hop_1_neighbors;
+        //scan source's neighbors
+        auto iterator = transaction.get_edges(source, /* label ? */ 0); // fixme: incoming edges for directed graphs
+        while(iterator.valid()){
+                //uint64_t u = iterator.dst_id();
+                neighbors.emplace_back(iterator.dst_id());
+                hop_1_neighbors.emplace_back(iterator.dst_id());
+                iterator.next();
+        }
+        //now scan hop 2 neighbors
+        for(auto hop1_neighbor : hop_1_neighbors){
+            auto neighbor_iterator = transaction.get_edges(hop1_neighbor, /* label ? */ 0); 
+            while(neighbor_iterator.valid()){
+                //uint64_t u = iterator.dst_id();
+                if(neighbor_iterator.dst_id()!=source)
+                    neighbors.emplace_back(neighbor_iterator.dst_id());
+                neighbor_iterator.next();
+            }
+        }
+      }
+      //omp for finished
+}
+
 } // namespace

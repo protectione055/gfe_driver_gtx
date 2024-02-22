@@ -292,6 +292,7 @@ public:
  */
 class GraphalyticsInterface : public virtual Interface {
 public:
+    const uint64_t two_hop_neighbor_size = 2000;
     /*
      * Libin add this for bwgraph
      */
@@ -327,6 +328,12 @@ public:
      */
     virtual void cdlp(uint64_t max_iterations, const char* dump2file = nullptr) = 0;
 
+    virtual void generate_two_hops_neighbor_candidates(std::vector<uint64_t>&vertices){}
+
+    virtual void one_hop_neighbors(std::vector<uint64_t>&vertices){}
+
+    virtual void two_hop_neighbors(std::vector<uint64_t>&vertices){}
+    
     /**
      * Local clustering coefficient. Associate to each vertex the ratio between the number of its outgoing edges and the number of
      * possible remaining edges.

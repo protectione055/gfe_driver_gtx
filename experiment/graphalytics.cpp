@@ -166,6 +166,14 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
         }
 
         if(m_properties.cdlp.m_enabled){
+            //std::cout<<"execute 2 hops neighbors"<<std::endl;
+            std::vector<uint64_t>vertices;
+            interface->generate_two_hops_neighbor_candidates(vertices);
+            t_local.start();
+            interface->two_hop_neighbors(vertices);
+            t_local.stop();
+            m_exec_cdlp.push_back(t_local.microseconds());
+            /*
             //LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": CDLP, max_iterations: " << m_properties.cdlp.m_max_iterations);
             string path_tmp = get_temporary_path("cdlp", i);
             const char* path_result = m_validate_output_enabled ? path_tmp.c_str() : nullptr;
@@ -196,11 +204,17 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
                 LOG(">> Validation failed: " << e.what());
                 m_validate_results.emplace_back("cdlp", ValidationResult::FAILED);
                 m_properties.cdlp.m_enabled = false;
-            }
+            }*/
         }
 
         if(m_properties.lcc.m_enabled){
-            LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": LCC");
+            std::vector<uint64_t>vertices;
+            interface->generate_two_hops_neighbor_candidates(vertices);
+            t_local.start();
+            interface->one_hop_neighbors(vertices);
+            t_local.stop();
+            m_exec_lcc.push_back(t_local.microseconds());
+           /*LOG("Execution " << (i+1) << "/" << m_num_repetitions << ": LCC");
             string path_tmp = get_temporary_path("lcc", i);
             const char* path_result = m_validate_output_enabled ? path_tmp.c_str() : nullptr;
             try {
@@ -230,7 +244,7 @@ std::chrono::microseconds GraphalyticsSequential::execute(){
                 LOG(">> Validation failed: " << e.what());
                 m_validate_results.emplace_back("lcc", ValidationResult::FAILED);
                 m_properties.lcc.m_enabled = false;
-            }
+            }*/
         }
 
         if(m_properties.pagerank.m_enabled){
@@ -350,12 +364,14 @@ void GraphalyticsSequential::report(bool save_in_db){
     }
     if(!m_exec_cdlp.empty()){
         ExecStatistics stats { m_exec_cdlp };
-        cout << ">> CDLP " << stats << "\n";
+        //cout << ">> CDLP " << stats << "\n";
+        cout << ">> two hop neighbors " << stats << "\n";
         if(save_in_db) stats.save("cdlp");
     }
     if(!m_exec_lcc.empty()){
         ExecStatistics stats { m_exec_lcc };
-        cout << ">> LCC " << stats << "\n";
+        //cout << ">> LCC " << stats << "\n";
+        cout << ">> one hop neighbors " << stats << "\n";
         if(save_in_db) stats.save("lcc");
     }
     if(!m_exec_pagerank.empty()){

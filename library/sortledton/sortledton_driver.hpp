@@ -217,6 +217,12 @@ namespace gfe::library {
         void do_topology_scan();
         
         void do_weight_scan();
+
+        virtual void generate_two_hops_neighbor_candidates(std::vector<uint64_t>&vertices);
+        virtual void one_hop_neighbors(std::vector<uint64_t>&vertices);
+        virtual void two_hop_neighbors(std::vector<uint64_t>&vertices);
+
+        
     };
 
 }
