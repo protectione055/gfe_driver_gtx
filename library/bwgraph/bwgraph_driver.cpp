@@ -24,15 +24,15 @@
 #include "tbb/concurrent_hash_map.h"
 #include "../../third-party/gapbs/gapbs.hpp"
 #include "../../third-party/libcuckoo/cuckoohash_map.hh"
-#include "bwgraph.hpp"
+#include "GTX.hpp"
 #include "../../utility/timeout_service.hpp"
 
 using namespace common;
 using namespace libcuckoo;
 using namespace std;
 
-#define BwGraph reinterpret_cast<bg::Graph*>(m_pImpl)
-using vertex_dictionary_t = tbb::concurrent_hash_map<uint64_t, bg::vertex_t>;
+#define BwGraph reinterpret_cast<gt::Graph*>(m_pImpl)
+using vertex_dictionary_t = tbb::concurrent_hash_map<uint64_t, gt::vertex_t>;
 #define VertexDictionary reinterpret_cast<vertex_dictionary_t*>(m_pHashMap)
 
 /*****************************************************************************
@@ -51,7 +51,7 @@ namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
 
 namespace gfe::library {
     BwGraphDriver::BwGraphDriver(bool is_directed, bool read_only):m_pImpl(nullptr), m_pHashMap(nullptr), m_is_directed(is_directed),m_read_only(read_only) {
-        m_pImpl = new bg::Graph();
+        m_pImpl = new gt::Graph();
         m_pHashMap = new tbb::concurrent_hash_map<uint64_t, /* vertex_t */ uint64_t>();
     }
 
@@ -132,7 +132,7 @@ namespace gfe::library {
     uint64_t BwGraphDriver::int2ext(void* opaque_transaction, uint64_t internal_vertex_id) const {
         //todo: if read_only, else
         if(m_read_only){
-            auto transaction = reinterpret_cast<bg::SharedROTransaction*>(opaque_transaction);
+            auto transaction = reinterpret_cast<gt::SharedROTransaction*>(opaque_transaction);
             string_view payload = transaction->get_vertex(internal_vertex_id);//they store external vid in the vertex data for experiments
             if(payload.empty()){ // the vertex does not exist
                 return numeric_limits<uint64_t>::max();
@@ -140,9 +140,9 @@ namespace gfe::library {
                 return *(reinterpret_cast<const uint64_t*>(payload.data()));
             }
         }else{
-            //auto transaction = reinterpret_cast<bg::RWTransaction*>(opaque_transaction);
+            //auto transaction = reinterpret_cast<gt::RWTransaction*>(opaque_transaction);
             //todo:: libin changed it here, just always use this one for our experiment?
-            auto transaction = reinterpret_cast<bg::SharedROTransaction*>(opaque_transaction);
+            auto transaction = reinterpret_cast<gt::SharedROTransaction*>(opaque_transaction);
             string_view payload = transaction->get_vertex(internal_vertex_id);//they store external vid in the vertex data for experiments
             if(payload.empty()){ // the vertex does not exist
                 return numeric_limits<uint64_t>::max();
@@ -153,7 +153,7 @@ namespace gfe::library {
     }
 
     uint64_t BwGraphDriver::int2ext_openmp(void *opaque_transaction, uint64_t internal_vertex_id, uint8_t thread_id) const {
-        auto transaction = reinterpret_cast<bg::SharedROTransaction*>(opaque_transaction);
+        auto transaction = reinterpret_cast<gt::SharedROTransaction*>(opaque_transaction);
         string_view payload = transaction->get_vertex(internal_vertex_id,thread_id);//they store external vid in the vertex data for experiments
         if(payload.empty()){ // the vertex does not exist
             return numeric_limits<uint64_t>::max();
@@ -165,7 +165,7 @@ namespace gfe::library {
         vertex_dictionary_t::accessor accessor; // xlock
         bool inserted = VertexDictionary->insert(accessor, external_id);
         if ( inserted ){
-            bg::vertex_t internal_id = 0;
+            gt::vertex_t internal_id = 0;
             bool done = false;
             do {
                 auto tx = BwGraph->begin_read_write_transaction();
@@ -175,7 +175,7 @@ namespace gfe::library {
                     tx.put_vertex(internal_id, data);
                     tx.commit();
                     done = true;
-                } catch(bg::RollbackExcept& e){
+                } catch(gt::RollbackExcept& e){
                     tx.abort();
                     COUT_DEBUG("Rollback, vertex id: " << external_id);
                     // retry ...
@@ -202,8 +202,8 @@ namespace gfe::library {
         vertex_dictionary_t::const_accessor accessor1, accessor2;  // shared lock on the dictionary
         if(!VertexDictionary->find(accessor1, e.source())){ return false; }
         if(!VertexDictionary->find(accessor2, e.destination())) { return false; }
-        bg::vertex_t internal_source_id = accessor1->second;
-        bg::vertex_t internal_destination_id = accessor2->second;
+        gt::vertex_t internal_source_id = accessor1->second;
+        gt::vertex_t internal_destination_id = accessor2->second;
 
         bool done = false;
         do {
@@ -231,7 +231,7 @@ namespace gfe::library {
                     m_num_edges++;
                     done = true;
                 }
-            } catch (bg::RollbackExcept& exc){
+            } catch (gt::RollbackExcept& exc){
                 tx.abort();
                 COUT_DEBUG("Rollback, edge: " << e);
                 // retry ...
@@ -298,7 +298,7 @@ namespace gfe::library {
                     // b) In undirected graphs, we follow the same convention given by G. Feng, author
                     // of the LiveGraph paper, for his experiments in the LDBC SNB Person knows Person:
                     // undirected edges are added twice as a -> b and b -> a
-                    //bg::label_t label = 1;
+                    //gt::label_t label = 1;
                     //tx.put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
                     result&=tx.checked_put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
                 }
@@ -307,7 +307,7 @@ namespace gfe::library {
                         m_num_edges++;
                     done = true;
                 }
-            } catch (bg::RollbackExcept& e){
+            } catch (gt::RollbackExcept& e){
                 tx.abort();
                 // retry ...
             }
@@ -386,7 +386,7 @@ namespace gfe::library {
                     // b) In undirected graphs, we follow the same convention given by G. Feng, author
                     // of the LiveGraph paper, for his experiments in the LDBC SNB Person knows Person:
                     // undirected edges are added twice as a -> b and b -> a
-                    //bg::label_t label = 1;
+                    //gt::label_t label = 1;
                     //tx.put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
                     result&=tx.checked_put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
                 }
@@ -395,7 +395,7 @@ namespace gfe::library {
                         m_num_edges++;
                     done = true;
                 }
-            } catch (bg::RollbackExcept& e){
+            } catch (gt::RollbackExcept& e){
                 tx.abort();
                 // retry ...
             }
@@ -485,7 +485,7 @@ namespace gfe::library {
                     // b) In undirected graphs, we follow the same convention given by G. Feng, author
                     // of the LiveGraph paper, for his experiments in the LDBC SNB Person knows Person:
                     // undirected edges are added twice as a -> b and b -> a
-                    //bg::label_t label = 1;
+                    //gt::label_t label = 1;
                     //tx.put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
                     result&=tx.checked_put_edge(internal_destination_id, /* label */ 1, internal_source_id, weight);
                 }
@@ -494,7 +494,7 @@ namespace gfe::library {
                         m_num_edges++;
                     done = true;
                 }
-            } catch (bg::RollbackExcept& e){
+            } catch (gt::RollbackExcept& e){
                 tx.abort();
                 // retry ...
             }
@@ -517,8 +517,8 @@ namespace gfe::library {
         vertex_dictionary_t::const_accessor slock1, slock2;
         if(!VertexDictionary->find(slock1, e.source())){ return false; }
         if(!VertexDictionary->find(slock2, e.destination())){ return false; }
-        bg::vertex_t internal_source_id = slock1->second;
-        bg::vertex_t internal_destination_id = slock2->second;
+        gt::vertex_t internal_source_id = slock1->second;
+        gt::vertex_t internal_destination_id = slock2->second;
 
         while(true){
             auto tx = BwGraph->begin_read_write_transaction();
@@ -539,7 +539,7 @@ namespace gfe::library {
                        return false;
                    }
                 }
-            } catch(bg::RollbackExcept& e){
+            } catch(gt::RollbackExcept& e){
                 tx.abort();
                 // retry ...
             }
@@ -551,8 +551,8 @@ namespace gfe::library {
         vertex_dictionary_t::const_accessor slock1, slock2;
         if(!VertexDictionary->find(slock1, source)){ return numeric_limits<double>::signaling_NaN(); }
         if(!VertexDictionary->find(slock2, destination)){ return numeric_limits<double>::signaling_NaN(); }
-        bg::vertex_t internal_source_id = slock1->second;
-        bg::vertex_t internal_destination_id = slock2->second;
+        gt::vertex_t internal_source_id = slock1->second;
+        gt::vertex_t internal_destination_id = slock2->second;
 
         auto tx = BwGraph->begin_read_only_transaction();
        /*string_view bg_weight = tx.get_edge(internal_source_id, internal_destination_id, 1);
@@ -607,7 +607,7 @@ namespace gfe::library {
     vector<pair<uint64_t, T>> BwGraphDriver::translate(void* /* transaction object */ opaque_transaction, const T* __restrict data, uint64_t data_sz) {
         assert(opaque_transaction != nullptr && "Transaction object not specified");
         vector<pair<uint64_t, T>> output(data_sz);
-        auto transaction = reinterpret_cast<bg::SharedROTransaction*>(opaque_transaction);
+        auto transaction = reinterpret_cast<gt::SharedROTransaction*>(opaque_transaction);
        /* for(uint64_t logical_id = 1; logical_id <= data_sz; logical_id++){
             uint64_t external_id = int2ext(transaction, logical_id);
             if(external_id == numeric_limits<uint64_t>::max()) { // the vertex does not exist
@@ -640,7 +640,7 @@ namespace gfe::library {
     BwGraphDriver::static_translate(void *opaque_transaction, const T *__restrict data, uint64_t data_sz) {
         assert(opaque_transaction != nullptr && "Transaction object not specified");
         vector<pair<uint64_t, T>> output(data_sz);
-        auto transaction = reinterpret_cast<bg::SharedROTransaction*>(opaque_transaction);
+        auto transaction = reinterpret_cast<gt::SharedROTransaction*>(opaque_transaction);
         /* for(uint64_t logical_id = 1; logical_id <= data_sz; logical_id++){
              uint64_t external_id = int2ext(transaction, logical_id);
              if(external_id == numeric_limits<uint64_t>::max()) { // the vertex does not exist
@@ -750,7 +750,7 @@ namespace gfe::library {
 #endif
 
     static
-    int64_t do_bfs_BUStep(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::Bitmap &front, gapbs::Bitmap &next) {
+    int64_t do_bfs_BUStep(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::Bitmap &front, gapbs::Bitmap &next) {
         int64_t awake_count = 0;
         next.reset();
         auto graph = transaction.get_graph();
@@ -792,7 +792,7 @@ namespace gfe::library {
         return awake_count;
     }
     static
-    int64_t static_do_bfs_BUStep(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::Bitmap &front, gapbs::Bitmap &next) {
+    int64_t static_do_bfs_BUStep(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::Bitmap &front, gapbs::Bitmap &next) {
         int64_t awake_count = 0;
         next.reset();
 //#pragma omp parallel for schedule(dynamic, 1024) reduction(+ : awake_count)
@@ -826,7 +826,7 @@ namespace gfe::library {
         return awake_count;
     }
     static
-    int64_t do_bfs_TDStep(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::SlidingQueue<int64_t>& queue) {
+    int64_t do_bfs_TDStep(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::SlidingQueue<int64_t>& queue) {
         int64_t scout_count = 0;
         auto graph = transaction.get_graph();
 #pragma omp parallel reduction(+ : scout_count)
@@ -868,7 +868,7 @@ namespace gfe::library {
         return scout_count;
     }
     static
-    int64_t static_do_bfs_TDStep(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::SlidingQueue<int64_t>& queue) {
+    int64_t static_do_bfs_TDStep(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t* distances, int64_t distance, gapbs::SlidingQueue<int64_t>& queue) {
         int64_t scout_count = 0;
 #pragma omp parallel reduction(+ : scout_count)
         {
@@ -900,7 +900,7 @@ namespace gfe::library {
         return scout_count;
     }
     static
-    void do_bfs_QueueToBitmap(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, const gapbs::SlidingQueue<int64_t> &queue, gapbs::Bitmap &bm) {
+    void do_bfs_QueueToBitmap(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, const gapbs::SlidingQueue<int64_t> &queue, gapbs::Bitmap &bm) {
 #pragma omp parallel for
         for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
             int64_t u = *q_iter;
@@ -909,7 +909,7 @@ namespace gfe::library {
     }
 
     static
-    void do_bfs_BitmapToQueue(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, const gapbs::Bitmap &bm, gapbs::SlidingQueue<int64_t> &queue) {
+    void do_bfs_BitmapToQueue(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, const gapbs::Bitmap &bm, gapbs::SlidingQueue<int64_t> &queue) {
 #pragma omp parallel
         {
             gapbs::QueueBuffer<int64_t> lqueue(queue);
@@ -922,7 +922,7 @@ namespace gfe::library {
         queue.slide_window();
     }
     static
-    unique_ptr<int64_t[]> do_bfs_init_distances_init_edge_num(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t& edge_num){
+    unique_ptr<int64_t[]> do_bfs_init_distances_init_edge_num(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, int64_t& edge_num){
         unique_ptr<int64_t[]> distances{ new int64_t[max_vertex_id] };
         //reset thread ID's
         auto graph = transaction.get_graph();
@@ -960,7 +960,7 @@ namespace gfe::library {
         return distances;
     }
     static
-    unique_ptr<int64_t[]> do_bfs_init_distances(bg::SharedROTransaction& transaction, uint64_t max_vertex_id) {
+    unique_ptr<int64_t[]> do_bfs_init_distances(gt::SharedROTransaction& transaction, uint64_t max_vertex_id) {
         unique_ptr<int64_t[]> distances{ new int64_t[max_vertex_id] };
         //reset thread ID's
         auto graph = transaction.get_graph();
@@ -993,7 +993,7 @@ namespace gfe::library {
         return distances;
     }
     static
-    unique_ptr<int64_t[]> static_do_bfs_init_distances(bg::SharedROTransaction& transaction, uint64_t max_vertex_id) {
+    unique_ptr<int64_t[]> static_do_bfs_init_distances(gt::SharedROTransaction& transaction, uint64_t max_vertex_id) {
         unique_ptr<int64_t[]> distances{ new int64_t[max_vertex_id] };
 
 #pragma omp parallel
@@ -1022,7 +1022,7 @@ namespace gfe::library {
         return distances;
     }
     static
-    unique_ptr<int64_t[]> do_bfs(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
+    unique_ptr<int64_t[]> do_bfs(gt::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
         // The implementation from GAP BS reports the parent (which indeed it should make more sense), while the one required by
         // Graphalytics only returns the distance
         //transaction.print_debug_info();
@@ -1079,7 +1079,7 @@ namespace gfe::library {
         return ptr_distances;
     }
     static
-    unique_ptr<int64_t[]> do_bfs(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t num_edges, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
+    unique_ptr<int64_t[]> do_bfs(gt::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t num_edges, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
         // The implementation from GAP BS reports the parent (which indeed it should make more sense), while the one required by
         // Graphalytics only returns the distance
         //transaction.print_debug_info();
@@ -1134,7 +1134,7 @@ namespace gfe::library {
         return ptr_distances;
     }
     static
-    unique_ptr<int64_t[]> static_do_bfs(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t num_edges, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
+    unique_ptr<int64_t[]> static_do_bfs(gt::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t num_edges, uint64_t max_vertex_id, uint64_t root, utility::TimeoutService& timer, int alpha = 15, int beta = 18) {
         // The implementation from GAP BS reports the parent (which indeed it should make more sense), while the one required by
         // Graphalytics only returns the distance
         //transaction.print_debug_info();
@@ -1192,7 +1192,7 @@ namespace gfe::library {
         // Init
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        bg::SharedROTransaction transaction =  BwGraph->begin_shared_read_only_transaction();
+        gt::SharedROTransaction transaction =  BwGraph->begin_shared_read_only_transaction();
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
         uint64_t num_vertices = m_num_vertices;
         //uint64_t num_edges = m_num_edges;
@@ -1281,7 +1281,7 @@ it is not necessarily the fastest way to implement it. It does perform the
 updates in the pull direction to remove the need for atomics.
 */
     static
-    unique_ptr<double[]> do_pagerank(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t num_iterations, double damping_factor, utility::TimeoutService& timer) {
+    unique_ptr<double[]> do_pagerank(gt::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t num_iterations, double damping_factor, utility::TimeoutService& timer) {
         const double init_score = 1.0 / num_vertices;
         const double base_score = (1.0 - damping_factor) / num_vertices;
 
@@ -1419,7 +1419,7 @@ updates in the pull direction to remove the need for atomics.
         return ptr_scores;
     }
     static
-    unique_ptr<double[]> do_static_pagerank(bg::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t num_iterations, double damping_factor, utility::TimeoutService& timer) {
+    unique_ptr<double[]> do_static_pagerank(gt::SharedROTransaction& transaction, uint64_t num_vertices, uint64_t max_vertex_id, uint64_t num_iterations, double damping_factor, utility::TimeoutService& timer) {
         const double init_score = 1.0 / num_vertices;
         const double base_score = (1.0 - damping_factor) / num_vertices;
 
@@ -1513,7 +1513,7 @@ updates in the pull direction to remove the need for atomics.
         // Init
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        bg::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
+        //gt::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
         uint64_t num_vertices = m_num_vertices;
         //reuse data structures
        /*auto result = BwGraph->compute_pagerank(num_vertices,num_iterations,damping_factor);
@@ -1611,7 +1611,7 @@ more consistent performance for undirected graphs.
  * Libin: bwgraph read-txn not thread safe, so these analytical functions can only be done in read-only environment
  */
     static
-    unique_ptr<uint64_t[]> do_wcc(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, utility::TimeoutService& timer) {
+    unique_ptr<uint64_t[]> do_wcc(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, utility::TimeoutService& timer) {
         // init
         COUT_DEBUG_WCC("max_vertex_id: " << max_vertex_id);
         unique_ptr<uint64_t[]> ptr_components { new uint64_t[max_vertex_id] };
@@ -1672,7 +1672,7 @@ more consistent performance for undirected graphs.
 
         return ptr_components;
     }
-    static void do_weighted_scan(bg::SharedROTransaction& transaction, uint64_t max_vertex_id){
+    static void do_weighted_scan(gt::SharedROTransaction& transaction, uint64_t max_vertex_id){
         uint64_t total_edge_num = 0;
         uint64_t total_vid_sum = 0;
         double total_weight = 0;
@@ -1743,7 +1743,7 @@ more consistent performance for undirected graphs.
  *****************************************************************************/
 // same impl~ as the one done for llama
     static
-    unique_ptr<uint64_t[]> do_cdlp(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, bool is_graph_directed, uint64_t max_iterations, utility::TimeoutService& timer) {
+    unique_ptr<uint64_t[]> do_cdlp(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, bool is_graph_directed, uint64_t max_iterations, utility::TimeoutService& timer) {
         unique_ptr<uint64_t[]> ptr_labels0 { new uint64_t[max_vertex_id] };
         unique_ptr<uint64_t[]> ptr_labels1 { new uint64_t[max_vertex_id] };
         uint64_t* labels0 = ptr_labels0.get(); // current labels
@@ -1805,7 +1805,7 @@ more consistent performance for undirected graphs.
             return ptr_labels1;
         }
     }
-    static void do_topology_scan(bg::SharedROTransaction& transaction, uint64_t max_vertex_id){
+    static void do_topology_scan(gt::SharedROTransaction& transaction, uint64_t max_vertex_id){
         uint64_t total_edge_num = 0;
         uint64_t total_vid_sum = 0;
         auto graph = transaction.get_graph();
@@ -1910,7 +1910,7 @@ more consistent performance for undirected graphs.
 #endif
 // loosely based on the impl~ made for GraphOne
     static
-    unique_ptr<double[]> do_lcc_undirected(bg::SharedROTransaction& transaction, uint64_t max_vertex_id, utility::TimeoutService& timer) {
+    unique_ptr<double[]> do_lcc_undirected(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, utility::TimeoutService& timer) {
         unique_ptr<double[]> ptr_lcc { new double[max_vertex_id] };
         double* lcc = ptr_lcc.get();
         unique_ptr<uint32_t[]> ptr_degrees_out { new uint32_t[max_vertex_id] };
@@ -2001,7 +2001,7 @@ more consistent performance for undirected graphs.
 
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        bg::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
+        gt::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
 
         // Run the LCC algorithm
@@ -2055,7 +2055,7 @@ more consistent performance for undirected graphs.
     using WeightT = double;
     static const size_t kMaxBin = numeric_limits<size_t>::max()/2;
     static
-    gapbs::pvector<WeightT> do_sssp(bg::SharedROTransaction& transaction, uint64_t num_edges, uint64_t max_vertex_id, uint64_t source, double delta, utility::TimeoutService& timer) {
+    gapbs::pvector<WeightT> do_sssp(gt::SharedROTransaction& transaction, uint64_t num_edges, uint64_t max_vertex_id, uint64_t source, double delta, utility::TimeoutService& timer) {
         // Init
         gapbs::pvector<WeightT> dist(max_vertex_id, numeric_limits<WeightT>::infinity());
         dist[source-1] = 0;
@@ -2151,7 +2151,7 @@ more consistent performance for undirected graphs.
     }
 
     static
-    gapbs::pvector<WeightT> do_static_sssp(bg::SharedROTransaction& transaction, uint64_t num_edges, uint64_t max_vertex_id, uint64_t source, double delta, utility::TimeoutService& timer) {
+    gapbs::pvector<WeightT> do_static_sssp(gt::SharedROTransaction& transaction, uint64_t num_edges, uint64_t max_vertex_id, uint64_t source, double delta, utility::TimeoutService& timer) {
         // Init
         gapbs::pvector<WeightT> dist(max_vertex_id, numeric_limits<WeightT>::infinity());
         dist[source-1] = 0;
@@ -2260,7 +2260,7 @@ more consistent performance for undirected graphs.
         //std::cout<<"sssp ran"<<std::endl;
        /*utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        bg::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
+        gt::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
         uint64_t num_edges = m_num_edges;
         uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
         uint64_t root = ext2int(source_vertex_id);

@@ -7189,7 +7189,8 @@ fi
 
 
     path_bwgraph=$(realpath "${with_bwgraph}")
-    path_bwgraph_library="${path_bwgraph}/libbwgraph.so"
+    #path_bwgraph_library="${path_bwgraph}/libbwgraph.so"
+    path_bwgraph_library="${path_bwgraph}/libgtx.so"
     as_ac_File=`printf "%s\n" "ac_cv_file_${path_bwgraph_library}" | $as_tr_sh`
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for ${path_bwgraph_library}" >&5
 printf %s "checking for ${path_bwgraph_library}... " >&6; }
@@ -7250,7 +7251,8 @@ printf "%s\n" "$as_me: BwGraph include path: ${path_bwgraph_includedir}" >&6;}
     as_fn_append CPPFLAGS " -I${path_bwgraph_includedir} -I${path_bwgraph}/include"
     as_fn_append CPPFLAGS " -I${path_bwgraph_includedir}/bind -I${path_bwgraph_includedir}/core -I${path_bwgraph}/include"
     # TODO clean up include structure in bwgraph
-    LIBS="-L${path_bwgraph} -lbwgraph ${LIBS}"
+    #AS_VAR_SET([LIBS], ["-L${path_bwgraph} -lbwgraph ${LIBS}"])
+    LIBS="-L${path_bwgraph} -lgtx ${LIBS}"
 
     # Try to compile a program with BwGraph
     cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -7263,7 +7265,7 @@ int
 main (void)
 {
 
-            bg::Graph g;
+            gt::Graph g;
 
   ;
   return 0;

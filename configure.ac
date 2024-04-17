@@ -310,7 +310,8 @@ if ( test x"${with_bwgraph}" != x"" && test x"${with_bwgraph}" != "no" ); then
     MY_INTEL_TBB()
 
     path_bwgraph=$(realpath "${with_bwgraph}")
-    path_bwgraph_library="${path_bwgraph}/libbwgraph.so"
+    #path_bwgraph_library="${path_bwgraph}/libbwgraph.so"
+    path_bwgraph_library="${path_bwgraph}/libgtx.so"
     AC_CHECK_FILE([${path_bwgraph_library}], [  ],  [ AC_MSG_ERROR([file not found: ${path_bwgraph_library}]) ])
 
     path_bwgraph_makefile="${path_bwgraph}/Makefile"
@@ -322,14 +323,15 @@ if ( test x"${with_bwgraph}" != x"" && test x"${with_bwgraph}" != "no" ); then
     AS_VAR_APPEND([CPPFLAGS], [" -I${path_bwgraph_includedir} -I${path_bwgraph}/include"])
     AS_VAR_APPEND([CPPFLAGS], [" -I${path_bwgraph_includedir}/bind -I${path_bwgraph_includedir}/core -I${path_bwgraph}/include"])
     # TODO clean up include structure in bwgraph
-    AS_VAR_SET([LIBS], ["-L${path_bwgraph} -lbwgraph ${LIBS}"])
+    #AS_VAR_SET([LIBS], ["-L${path_bwgraph} -lbwgraph ${LIBS}"])
+    AS_VAR_SET([LIBS], ["-L${path_bwgraph} -lgtx ${LIBS}"])
 
     # Try to compile a program with BwGraph
     AC_LINK_IFELSE([
         AC_LANG_PROGRAM([[
-            @%:@include "bwgraph.hpp"
+            @%:@include "GTX.hpp"
         ]], [[
-            bg::Graph g;
+            gt::Graph g;
         ]])
     ], [], [
         AC_MSG_FAILURE([unable to compile and link an executable with BwGraph])
