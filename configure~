@@ -7259,7 +7259,7 @@ printf "%s\n" "$as_me: BwGraph include path: ${path_bwgraph_includedir}" >&6;}
 /* end confdefs.h.  */
 
 
-            #include "bwgraph.hpp"
+            #include "GTX.hpp"
 
 int
 main (void)

@@ -201,7 +201,7 @@ public:
     virtual void set_worker_thread_num(uint64_t new_num){}
     //libin for debug: print out status at the end
     virtual void on_edge_writes_finish(){}
-    //libin for bwgraph: gracefully exit worker thread because of lazy updates
+    //libin for gtx: gracefully exit worker thread because of lazy updates
     virtual void thread_exit(){}
     //lbin: print txn stats after a batch
     virtual void print_and_clear_txn_stats(){}
@@ -294,7 +294,7 @@ class GraphalyticsInterface : public virtual Interface {
 public:
     const uint64_t two_hop_neighbor_size = 2000;
     /*
-     * Libin add this for bwgraph
+     * Libin add this for gtx
      */
     virtual void set_worker_thread_num(uint64_t new_num){}
     virtual void finish_loading(){}

@@ -132,7 +132,7 @@ void Aging2Experiment::set_memfp_threshold(uint64_t value) {
 Aging2Result Aging2Experiment::execute(){
     if(m_library.get() == nullptr) ERROR("Library not set. Use #set_library to set it.");
     if(m_path_log.empty()) ERROR("Path to the log file not set. Use #set_log to set it.")
-#if HAVE_BWGRAPH
+#if HAVE_GTX
    // m_library.get()->set_worker_thread_num(m_num_threads);
 #endif
     m_master = new details::Aging2Master(*this);

@@ -70,7 +70,7 @@ static void run_concurrent(library::UpdateInterface* interface, graph::WeightedE
 void InsertOnly::execute_round_robin(){
     LOG("Execute round robin");
     vector<thread> threads;
-#if HAVE_BWGRAPH
+#if HAVE_GTX
     m_interface.get()->set_worker_thread_num(m_num_threads);
 #endif
     atomic<uint64_t> start_chunk_next = 0;

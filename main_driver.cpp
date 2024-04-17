@@ -172,7 +172,7 @@ static void run_standalone(int argc, char* argv[]){
               LOG("[driver] Number of concurrent threads: " << configuration().num_threads(THREADS_WRITE));
               LOG("[driver] Aging2, path to the log of updates: " << configuration().get_update_log());
               Aging2Experiment experiment;
-#if HAVE_BWGRAPH
+#if HAVE_GTX
                 impl_upd->set_worker_thread_num(configuration().num_threads(THREADS_WRITE));
 #endif
               experiment.set_library(impl_upd);
@@ -217,13 +217,13 @@ static void run_standalone(int argc, char* argv[]){
             LOG("[driver] OpenMP, number of threads for the Graphalytics suite: " << configuration().num_threads(ThreadsType::THREADS_READ));
             omp_set_num_threads(configuration().num_threads(ThreadsType::THREADS_READ));
         }
-#if HAVE_BWGRAPH
+#if HAVE_GTX
         //no need to plus 1, main thread will participate in openmp
         impl_ga.get()->finish_loading();
-        std::cout<<"bwgraph set reader threads"<<std::endl;
+        std::cout<<"gtx set reader threads"<<std::endl;
         impl_ga.get()->set_worker_thread_num(configuration().num_threads(ThreadsType::THREADS_READ));
         //impl_ga.get()->configure_distinct_reader_and_writer_threads(configuration().num_threads(ThreadsType::THREADS_READ),1);
-#endif //HAVE_BWGRAPH
+#endif //HAVE_GTX
 #endif
 
         // run the graphalytics suite

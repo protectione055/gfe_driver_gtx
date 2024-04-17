@@ -6,7 +6,7 @@ GFE Driver
 
 The GFE (Graph Framework Evaluation) Driver is the program used to run the experiments in "Bw-Graph: A  Write-Optimized Lock-free Graph System with Transactional Support", measuring the throughput of updates in libraries supporting structural dynamic graphs and the completion times of 
 the [Graphalytics kernels](https://github.com/ldbc/ldbc_graphalytics) concurrently. 
-The driver supports the following systems: [Bw-Graph](https://anonymous.4open.science/r/BwGraph_v2-B9AC/README.md), [Sortledton](https://gitlab.db.in.tum.de/per.fuchs/sortledton), [Teseo](https://github.com/cwida/teseo), 
+The driver supports the following systems: [Bw-Graph](https://anonymous.4open.science/r/GTX_v2-B9AC/README.md), [Sortledton](https://gitlab.db.in.tum.de/per.fuchs/sortledton), [Teseo](https://github.com/cwida/teseo), 
 [LLAMA](https://github.com/goatdb/llama), [GraphOne](https://github.com/the-data-lab/GraphOne), 
 [Stinger](http://stingergraph.com/) and [LiveGraph](https://github.com/thu-pacman/LiveGraph-Binary) while we ran our experiments only for systems that support concurrent reads and writes under transactions (Bw-Graph, Sortledton, Teseo, and LiveGraph).
 It can run four kinds of experiments: insert all edges in a random permuted order or timestamp-based order from an input graph, execute the updates specified by a [graphlog file](https://github.com/whatsthecraic/graphlog), run the kernels of the Graphalytics suite: BFS, PageRank (PR), weighted shortest paths (SSSP), and concurrently execute updates and graph analytics.  
@@ -86,11 +86,11 @@ mkdir build && cd build
 ```
 
 #### Bw-Graph
-Currently we use the version on Anonymous GitHub at `https://anonymous.4open.science/r/BwGraph_v2-B9AC/README.md`. 
+Currently we use the version on Anonymous GitHub at `https://anonymous.4open.science/r/GTX_v2-B9AC/README.md`. 
 Follow the instruction in REAME to build Bw-Graph library. After the library has been built, configure the driver with:
 ```
 mkdir build && cd build
-../configure --enable-optimize --disable-debug --with-bwgraph=/path/to/Bw-Graph/build
+../configure --enable-optimize --disable-debug --with-gtx=/path/to/Bw-Graph/build
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/Bw-Graph/build
 export LD_LIBRARY_PATH 
 ```

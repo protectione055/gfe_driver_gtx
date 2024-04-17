@@ -293,40 +293,40 @@ if ( test x"${with_teseo}" != x"" && test x"${with_teseo}" != "no" ); then
 fi
 
 #############################################################################
-# Support for the BwGraph
+# Support for the GTX
 # Usage:
-# --with-bwgraph=/path/to/bwgraph/build
+# --with-gtx=/path/to/GTX/build
 #
 
-AC_ARG_WITH([bwgraph], [AS_HELP_STRING([--with-bwgraph@<:@=ARG@:>@], [
-    Enable the support to BwGraph. The argument needs to be the path where the library has been built.
+AC_ARG_WITH([GTX], [AS_HELP_STRING([--with-gtx@<:@=ARG@:>@], [
+    Enable the support to GTX. The argument needs to be the path where the library has been built.
 ])], [])
 
-if ( test x"${with_bwgraph}" != x"" && test x"${with_bwgraph}" != "no" ); then
-    if( test x"${with_bwgraph}" == x"yes" ); then
-        AC_MSG_ERROR(["the full path to the BwGraph build needs to be specified, e.g. --with-bwgraph=/path/to/bwgraph/build"]);
+if ( test x"${with_gtx}" != x"" && test x"${with_gtx}" != "no" ); then
+    if( test x"${with_gtx}" == x"yes" ); then
+        AC_MSG_ERROR(["the full path to the GTX build needs to be specified, e.g. --with-gtx=/path/to/gtx/build"]);
     fi
 
     MY_INTEL_TBB()
 
-    path_bwgraph=$(realpath "${with_bwgraph}")
-    #path_bwgraph_library="${path_bwgraph}/libbwgraph.so"
-    path_bwgraph_library="${path_bwgraph}/libgtx.so"
-    AC_CHECK_FILE([${path_bwgraph_library}], [  ],  [ AC_MSG_ERROR([file not found: ${path_bwgraph_library}]) ])
+    path_gtx=$(realpath "${with_gtx}")
+    #path_gtx_library="${path_gtx}/libgtx.so"
+    path_gtx_library="${path_gtx}/libgtx.so"
+    AC_CHECK_FILE([${path_gtx_library}], [  ],  [ AC_MSG_ERROR([file not found: ${path_gtx_library}]) ])
 
-    path_bwgraph_makefile="${path_bwgraph}/Makefile"
-    AC_CHECK_FILE([${path_bwgraph_makefile}], [  ],  [ AC_MSG_ERROR(["file not found: ${path_bwgraph_makefile}"]) ])
+    path_gtx_makefile="${path_gtx}/Makefile"
+    AC_CHECK_FILE([${path_gtx_makefile}], [  ],  [ AC_MSG_ERROR(["file not found: ${path_gtx_makefile}"]) ])
 
-    path_bwgraph_includedir=$(realpath "${path_bwgraph}/../")
-    AC_MSG_NOTICE([BwGraph include path: ${path_bwgraph_includedir}])
+    path_gtx_includedir=$(realpath "${path_gtx}/../")
+    AC_MSG_NOTICE([GTX include path: ${path_gtx_includedir}])
 
-    AS_VAR_APPEND([CPPFLAGS], [" -I${path_bwgraph_includedir} -I${path_bwgraph}/include"])
-    AS_VAR_APPEND([CPPFLAGS], [" -I${path_bwgraph_includedir}/bind -I${path_bwgraph_includedir}/core -I${path_bwgraph}/include"])
-    # TODO clean up include structure in bwgraph
-    #AS_VAR_SET([LIBS], ["-L${path_bwgraph} -lbwgraph ${LIBS}"])
-    AS_VAR_SET([LIBS], ["-L${path_bwgraph} -lgtx ${LIBS}"])
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_gtx_includedir} -I${path_gtx}/include"])
+    AS_VAR_APPEND([CPPFLAGS], [" -I${path_gtx_includedir}/bind -I${path_gtx_includedir}/core -I${path_gtx}/include"])
+    # TODO clean up include structure in gtx
+    #AS_VAR_SET([LIBS], ["-L${path_gtx} -lgtx ${LIBS}"])
+    AS_VAR_SET([LIBS], ["-L${path_gtx} -lgtx ${LIBS}"])
 
-    # Try to compile a program with BwGraph
+    # Try to compile a program with GTX
     AC_LINK_IFELSE([
         AC_LANG_PROGRAM([[
             @%:@include "GTX.hpp"
@@ -334,11 +334,11 @@ if ( test x"${with_bwgraph}" != x"" && test x"${with_bwgraph}" != "no" ); then
             gt::Graph g;
         ]])
     ], [], [
-        AC_MSG_FAILURE([unable to compile and link an executable with BwGraph])
+        AC_MSG_FAILURE([unable to compile and link an executable with GTX])
     ])
 
-    AC_MSG_NOTICE([BwGraph support enabled])
-    AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_BWGRAPH"])
+    AC_MSG_NOTICE([GTX support enabled])
+    AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_GTX"])
 fi
 
 #############################################################################

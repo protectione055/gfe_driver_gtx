@@ -307,7 +307,7 @@ namespace gfe::experiment::details {
         m_updates.clear();
         //for libin to understand
         //std::cout<<"worker "<<m_worker_id<<" finished updating edges"<<std::endl;
-#if HAVE_BWGRAPH
+#if HAVE_GTX
         //m_library->thread_exit();
 #endif
         // auto stop = std::chrono::high_resolution_clock::now();

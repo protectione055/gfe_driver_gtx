@@ -6,7 +6,7 @@
 // Created by zhou822 on 6/21/23.
 //
 
-#include "bwgraph_driver.hpp"
+#include "gtx_driver.hpp"
 
 #include <atomic>
 #include <cassert>
@@ -31,7 +31,7 @@ using namespace common;
 using namespace libcuckoo;
 using namespace std;
 
-#define BwGraph reinterpret_cast<gt::Graph*>(m_pImpl)
+#define GTX reinterpret_cast<gt::Graph*>(m_pImpl)
 using vertex_dictionary_t = tbb::concurrent_hash_map<uint64_t, gt::vertex_t>;
 #define VertexDictionary reinterpret_cast<vertex_dictionary_t*>(m_pHashMap)
 
@@ -42,7 +42,7 @@ using vertex_dictionary_t = tbb::concurrent_hash_map<uint64_t, gt::vertex_t>;
  *****************************************************************************/
 //#define DEBUG
 namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
-#define COUT_DEBUG_FORCE(msg) { std::scoped_lock<std::mutex> lock{::gfe::_log_mutex}; std::cout << "[BwGraphDriver::" << __FUNCTION__ << "] [Thread #" << common::concurrency::get_thread_id() << "] " << msg << std::endl; }
+#define COUT_DEBUG_FORCE(msg) { std::scoped_lock<std::mutex> lock{::gfe::_log_mutex}; std::cout << "[GTXDriver::" << __FUNCTION__ << "] [Thread #" << common::concurrency::get_thread_id() << "] " << msg << std::endl; }
 #if defined(DEBUG)
 //#define COUT_DEBUG(msg) COUT_DEBUG_FORCE(msg)
 #else
@@ -50,74 +50,74 @@ namespace gfe { extern mutex _log_mutex [[maybe_unused]]; }
 #endif
 
 namespace gfe::library {
-    BwGraphDriver::BwGraphDriver(bool is_directed, bool read_only):m_pImpl(nullptr), m_pHashMap(nullptr), m_is_directed(is_directed),m_read_only(read_only) {
+    GTXDriver::GTXDriver(bool is_directed, bool read_only):m_pImpl(nullptr), m_pHashMap(nullptr), m_is_directed(is_directed),m_read_only(read_only) {
         m_pImpl = new gt::Graph();
         m_pHashMap = new tbb::concurrent_hash_map<uint64_t, /* vertex_t */ uint64_t>();
     }
 
-    BwGraphDriver::~BwGraphDriver() noexcept {
-        delete BwGraph; m_pImpl = nullptr;
+    GTXDriver::~GTXDriver() noexcept {
+        delete GTX; m_pImpl = nullptr;
         delete VertexDictionary; m_pHashMap = nullptr;
     }
 
-    void BwGraphDriver::set_worker_thread_num(uint64_t new_num) {
+    void GTXDriver::set_worker_thread_num(uint64_t new_num) {
 
-        BwGraph->set_worker_thread_num(new_num);
-        std::cout<<"set BwGraph worker thread num "<<new_num<<std::endl;
+        GTX->set_worker_thread_num(new_num);
+        std::cout<<"set GTX worker thread num "<<new_num<<std::endl;
     }
-    void BwGraphDriver::on_edge_writes_finish(){
-        BwGraph->print_garbage_queue_status();
+    void GTXDriver::on_edge_writes_finish(){
+        GTX->print_garbage_queue_status();
     }
-    void BwGraphDriver::thread_exit(){
-        BwGraph->thread_exit();
+    void GTXDriver::thread_exit(){
+        GTX->thread_exit();
     }
-    void BwGraphDriver::on_openmp_workloads_finish() {
-        BwGraph->on_openmp_workloads_finish();
+    void GTXDriver::on_openmp_workloads_finish() {
+        GTX->on_openmp_workloads_finish();
     }
-    void BwGraphDriver::configure_distinct_reader_and_writer_threads(uint64_t reader_num, uint64_t writer_num) {
-        BwGraph->configure_distinct_readers_and_writers(reader_num,writer_num);
-    }
-
-    void BwGraphDriver::mixed_workload_finish_loading(){
-        BwGraph->on_finish_loading();
+    void GTXDriver::configure_distinct_reader_and_writer_threads(uint64_t reader_num, uint64_t writer_num) {
+        GTX->configure_distinct_readers_and_writers(reader_num,writer_num);
     }
 
-    void BwGraphDriver::print_and_clear_txn_stats() {
-        BwGraph->print_and_clear_txn_stats();
+    void GTXDriver::mixed_workload_finish_loading(){
+        GTX->on_finish_loading();
     }
 
-    bool BwGraphDriver::is_directed() const {
+    void GTXDriver::print_and_clear_txn_stats() {
+        GTX->print_and_clear_txn_stats();
+    }
+
+    bool GTXDriver::is_directed() const {
         return m_is_directed;
     }
 
-    uint64_t BwGraphDriver::num_edges() const {
+    uint64_t GTXDriver::num_edges() const {
         return m_num_edges;
     }
 
-    uint64_t BwGraphDriver::num_vertices() const {
+    uint64_t GTXDriver::num_vertices() const {
         return m_num_vertices;
     }
 
-    void BwGraphDriver::set_timeout(uint64_t seconds) {
+    void GTXDriver::set_timeout(uint64_t seconds) {
         m_timeout = chrono::seconds{ seconds };
     }
 
-    void* BwGraphDriver::bwgraph(){
+    void* GTXDriver::gtx(){
         return m_pImpl;
     }
 
-    void* BwGraphDriver::vertex_dictionary() {
+    void* GTXDriver::vertex_dictionary() {
         return m_pHashMap;
     }
 
-    void BwGraphDriver::analytical_workload_end(){
-       // BwGraph->on_read_workload_finishing
+    void GTXDriver::analytical_workload_end(){
+       // GTX->on_read_workload_finishing
     }
 
-    void BwGraphDriver::finish_loading() {
-        BwGraph->whole_label_graph_eager_consolidation(1);
+    void GTXDriver::finish_loading() {
+        GTX->whole_label_graph_eager_consolidation(1);
     }
-    uint64_t BwGraphDriver::ext2int(uint64_t external_vertex_id) const {
+    uint64_t GTXDriver::ext2int(uint64_t external_vertex_id) const {
         vertex_dictionary_t::const_accessor accessor;
         if ( VertexDictionary->find(accessor, external_vertex_id ) ){
             return accessor->second;
@@ -129,7 +129,7 @@ namespace gfe::library {
         }
     }
     //todo: check what should we do to support both read only and rw transaction here
-    uint64_t BwGraphDriver::int2ext(void* opaque_transaction, uint64_t internal_vertex_id) const {
+    uint64_t GTXDriver::int2ext(void* opaque_transaction, uint64_t internal_vertex_id) const {
         //todo: if read_only, else
         if(m_read_only){
             auto transaction = reinterpret_cast<gt::SharedROTransaction*>(opaque_transaction);
@@ -152,7 +152,7 @@ namespace gfe::library {
         }
     }
 
-    uint64_t BwGraphDriver::int2ext_openmp(void *opaque_transaction, uint64_t internal_vertex_id, uint8_t thread_id) const {
+    uint64_t GTXDriver::int2ext_openmp(void *opaque_transaction, uint64_t internal_vertex_id, uint8_t thread_id) const {
         auto transaction = reinterpret_cast<gt::SharedROTransaction*>(opaque_transaction);
         string_view payload = transaction->get_vertex(internal_vertex_id,thread_id);//they store external vid in the vertex data for experiments
         if(payload.empty()){ // the vertex does not exist
@@ -161,14 +161,14 @@ namespace gfe::library {
             return *(reinterpret_cast<const uint64_t*>(payload.data()));
         }
     }
-    bool BwGraphDriver::add_vertex(uint64_t external_id) {
+    bool GTXDriver::add_vertex(uint64_t external_id) {
         vertex_dictionary_t::accessor accessor; // xlock
         bool inserted = VertexDictionary->insert(accessor, external_id);
         if ( inserted ){
             gt::vertex_t internal_id = 0;
             bool done = false;
             do {
-                auto tx = BwGraph->begin_read_write_transaction();
+                auto tx = GTX->begin_read_write_transaction();
                 try {
                     internal_id = tx.new_vertex();
                     string_view data { (char*) &external_id, sizeof(external_id) };
@@ -187,18 +187,18 @@ namespace gfe::library {
         }
         return inserted;
     }
-    //todo:: currently bwgraph did not implement delete vertex, it should be much more complicated
-    bool BwGraphDriver::remove_vertex(uint64_t vertex_id) {
+    //todo:: currently gtx did not implement delete vertex, it should be much more complicated
+    bool GTXDriver::remove_vertex(uint64_t vertex_id) {
         m_num_vertices --;
         return true;
     }
 
-    bool BwGraphDriver::has_vertex(uint64_t vertex_id) const {
+    bool GTXDriver::has_vertex(uint64_t vertex_id) const {
         vertex_dictionary_t::const_accessor accessor;
         return VertexDictionary->find(accessor, vertex_id);
     }
 
-    bool BwGraphDriver::add_edge(gfe::graph::WeightedEdge e) {
+    bool GTXDriver::add_edge(gfe::graph::WeightedEdge e) {
         vertex_dictionary_t::const_accessor accessor1, accessor2;  // shared lock on the dictionary
         if(!VertexDictionary->find(accessor1, e.source())){ return false; }
         if(!VertexDictionary->find(accessor2, e.destination())) { return false; }
@@ -207,7 +207,7 @@ namespace gfe::library {
 
         bool done = false;
         do {
-            auto tx = BwGraph->begin_read_write_transaction();
+            auto tx = GTX->begin_read_write_transaction();
             try {
 
                 // insert the new edge only if it doesn't already exist
@@ -218,7 +218,7 @@ namespace gfe::library {
                 }
 
                 string_view weight { (char*) &e.m_weight, sizeof(e.weight()) };
-                //bwgraph label is at least 1
+                //gtx label is at least 1
                 tx.put_edge(internal_source_id, /* label */ 1, internal_destination_id, weight);
                 if(!m_is_directed){ // undirected graph
                     // We follow the same convention given by G. Feng, author of the LiveGraph paper,
@@ -241,7 +241,7 @@ namespace gfe::library {
         return true;
     }
 
-    bool BwGraphDriver::add_edge_v2(gfe::graph::WeightedEdge edge){
+    bool GTXDriver::add_edge_v2(gfe::graph::WeightedEdge edge){
         uint64_t internal_source_id = numeric_limits<uint64_t>::max();
         uint64_t internal_destination_id = 0;
         bool insert_source = false;
@@ -273,9 +273,9 @@ namespace gfe::library {
 
         bool done = false;
         do {
-            auto tx = BwGraph->begin_read_write_transaction();
+            auto tx = GTX->begin_read_write_transaction();
             try {
-                // create the vertices in BwGraph
+                // create the vertices in GTX
                 if(insert_source){
                     internal_source_id = tx.new_vertex();
                     string_view data { (char*) &edge.m_source, sizeof(edge.m_source) };
@@ -327,9 +327,9 @@ namespace gfe::library {
         return result;
     }
 /*
- * bwgraph version is the same as v2
+ * gtx version is the same as v2
  */
-    bool BwGraphDriver::add_edge_v3(gfe::graph::WeightedEdge edge){
+    bool GTXDriver::add_edge_v3(gfe::graph::WeightedEdge edge){
         uint64_t internal_source_id = numeric_limits<uint64_t>::max();
         uint64_t internal_destination_id = 0;
         bool insert_source = false;
@@ -361,9 +361,9 @@ namespace gfe::library {
 
         bool done = false;
         do {
-            auto tx = BwGraph->begin_read_write_transaction();
+            auto tx = GTX->begin_read_write_transaction();
             try {
-                // create the vertices in BwGraph
+                // create the vertices in GTX
                 if(insert_source){
                     internal_source_id = tx.new_vertex();
                     string_view data { (char*) &edge.m_source, sizeof(edge.m_source) };
@@ -418,7 +418,7 @@ namespace gfe::library {
     /*
      * lookup the edge, and then insert/update
      */
-    bool BwGraphDriver::update_edge_v1(gfe::graph::WeightedEdge edge) {
+    bool GTXDriver::update_edge_v1(gfe::graph::WeightedEdge edge) {
         uint64_t internal_source_id = numeric_limits<uint64_t>::max();
         uint64_t internal_destination_id = 0;
         bool insert_source = false;
@@ -451,10 +451,10 @@ namespace gfe::library {
         bool done = false;
         bool need_check = true;
         do {
-            auto tx = BwGraph->begin_read_write_transaction();
+            auto tx = GTX->begin_read_write_transaction();
             double update_weight = edge.m_weight;
             try {
-                // create the vertices in BwGraph
+                // create the vertices in GTX
                 if(insert_source){
                     internal_source_id = tx.new_vertex();
                     string_view data { (char*) &edge.m_source, sizeof(edge.m_source) };
@@ -513,7 +513,7 @@ namespace gfe::library {
         return true;
     }
 
-    bool BwGraphDriver::remove_edge(gfe::graph::Edge e){
+    bool GTXDriver::remove_edge(gfe::graph::Edge e){
         vertex_dictionary_t::const_accessor slock1, slock2;
         if(!VertexDictionary->find(slock1, e.source())){ return false; }
         if(!VertexDictionary->find(slock2, e.destination())){ return false; }
@@ -521,7 +521,7 @@ namespace gfe::library {
         gt::vertex_t internal_destination_id = slock2->second;
 
         while(true){
-            auto tx = BwGraph->begin_read_write_transaction();
+            auto tx = GTX->begin_read_write_transaction();
             try {
                 ///*bool removed =*/ tx.delete_edge(internal_source_id, /* label */ 1, internal_destination_id);
                 //if(/*removed &&*/ !m_is_directed){ // undirected graph
@@ -546,7 +546,7 @@ namespace gfe::library {
         }
     }
 
-    double BwGraphDriver::get_weight(uint64_t source, uint64_t destination) const {
+    double GTXDriver::get_weight(uint64_t source, uint64_t destination) const {
         // check whether the referred vertices exist
         vertex_dictionary_t::const_accessor slock1, slock2;
         if(!VertexDictionary->find(slock1, source)){ return numeric_limits<double>::signaling_NaN(); }
@@ -554,14 +554,14 @@ namespace gfe::library {
         gt::vertex_t internal_source_id = slock1->second;
         gt::vertex_t internal_destination_id = slock2->second;
 
-        auto tx = BwGraph->begin_read_only_transaction();
+        auto tx = GTX->begin_read_only_transaction();
        /*string_view bg_weight = tx.get_edge(internal_source_id, internal_destination_id, 1);
         double weight = numeric_limits<double>::signaling_NaN();
         if(bg_weight.size() > 0){ // the edge exists
             weight = *(reinterpret_cast<const double*>(bg_weight.data()));
         }*/
         auto weight = tx.get_edge_weight(internal_source_id, internal_destination_id, 1);
-        tx.commit(); //read-only txn should not abort in bwgraph
+        tx.commit(); //read-only txn should not abort in gtx
         return weight;
     }
 
@@ -570,11 +570,11 @@ namespace gfe::library {
     *  Dump                                                                     *
     *                                                                           *
     *****************************************************************************/
-    void BwGraphDriver::dump_ostream(std::ostream& out) const {
+    void GTXDriver::dump_ostream(std::ostream& out) const {
         out << "[LiveGraph] num vertices: " << m_num_vertices << ", num edges: " << m_num_edges << ", "
                                                                                                    "directed graph: " << boolalpha << is_directed() << ", read only txn for graphalytics: " << m_read_only << endl;
-        auto tx = BwGraph->begin_read_only_transaction();
-        const uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        auto tx = GTX->begin_read_only_transaction();
+        const uint64_t max_vertex_id = GTX->get_max_allocated_vid();
         for(uint64_t internal_source_id = 1; internal_source_id <= max_vertex_id; internal_source_id++){
             auto bg_external_id = tx.get_vertex(internal_source_id);
             if(bg_external_id.size() == 0) continue; // the vertex has been deleted
@@ -604,7 +604,7 @@ namespace gfe::library {
     *                                                                           *
     *****************************************************************************/
     template <typename T>
-    vector<pair<uint64_t, T>> BwGraphDriver::translate(void* /* transaction object */ opaque_transaction, const T* __restrict data, uint64_t data_sz) {
+    vector<pair<uint64_t, T>> GTXDriver::translate(void* /* transaction object */ opaque_transaction, const T* __restrict data, uint64_t data_sz) {
         assert(opaque_transaction != nullptr && "Transaction object not specified");
         vector<pair<uint64_t, T>> output(data_sz);
         auto transaction = reinterpret_cast<gt::SharedROTransaction*>(opaque_transaction);
@@ -637,7 +637,7 @@ namespace gfe::library {
 
     template<typename T>
     std::vector<std::pair<uint64_t, T>>
-    BwGraphDriver::static_translate(void *opaque_transaction, const T *__restrict data, uint64_t data_sz) {
+    GTXDriver::static_translate(void *opaque_transaction, const T *__restrict data, uint64_t data_sz) {
         assert(opaque_transaction != nullptr && "Transaction object not specified");
         vector<pair<uint64_t, T>> output(data_sz);
         auto transaction = reinterpret_cast<gt::SharedROTransaction*>(opaque_transaction);
@@ -665,7 +665,7 @@ namespace gfe::library {
     }
 
     template <typename T, bool negative_scores>
-    void BwGraphDriver::save_results(const vector<pair<uint64_t, T>>& result, const char* dump2file) {
+    void GTXDriver::save_results(const vector<pair<uint64_t, T>>& result, const char* dump2file) {
         assert(dump2file != nullptr);
         COUT_DEBUG("save the results to: " << dump2file);
 
@@ -1185,21 +1185,21 @@ namespace gfe::library {
 
         return ptr_distances;
     }
-    void BwGraphDriver::bfs(uint64_t external_source_id, const char* dump2file) {
+    void GTXDriver::bfs(uint64_t external_source_id, const char* dump2file) {
         //std::cout<<"from source "<<external_source_id<<std::endl;
         if(m_is_directed) { ERROR("This implementation of the BFS does not support directed graphs"); }
 
         // Init
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        gt::SharedROTransaction transaction =  BwGraph->begin_shared_read_only_transaction();
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        gt::SharedROTransaction transaction =  GTX->begin_shared_read_only_transaction();
+        uint64_t max_vertex_id = GTX->get_max_allocated_vid();
         uint64_t num_vertices = m_num_vertices;
         //uint64_t num_edges = m_num_edges;
         //transaction.print_debug_info();
         uint64_t root = ext2int(external_source_id);
         //COUT_DEBUG_BFS("root: " << root << " [external vertex: " << external_source_id << "]");
-        /*auto handler =  BwGraph->get_bfs_handler(num_vertices);
+        /*auto handler =  GTX->get_bfs_handler(num_vertices);
         handler.compute(root);
         if(dump2file != nullptr)
             save_results<int64_t, false>(*handler.get_result(),dump2file);*/
@@ -1210,7 +1210,7 @@ namespace gfe::library {
         //unique_ptr<int64_t[]> ptr_result = static_do_bfs(transaction, num_vertices, num_edges, max_vertex_id, root, timeout);
         //cout << "BFS took " << t << endl;
         if(timeout.is_timeout()){
-            transaction.commit(); // in bwgraph it is necessary
+            transaction.commit(); // in gtx it is necessary
             RAISE_EXCEPTION(TimeoutError, "Timeout occurred after " << timer);
         }
 
@@ -1507,25 +1507,25 @@ updates in the pull direction to remove the need for atomics.
         return ptr_scores;
     }
 
-    void BwGraphDriver::pagerank(uint64_t num_iterations, double damping_factor, const char* dump2file) {
+    void GTXDriver::pagerank(uint64_t num_iterations, double damping_factor, const char* dump2file) {
         if(m_is_directed) { ERROR("This implementation of PageRank does not support directed graphs"); }
 
         // Init
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        //gt::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
+        //gt::SharedROTransaction transaction = GTX->begin_shared_read_only_transaction();
         uint64_t num_vertices = m_num_vertices;
         //reuse data structures
-       /*auto result = BwGraph->compute_pagerank(num_vertices,num_iterations,damping_factor);
+       /*auto result = GTX->compute_pagerank(num_vertices,num_iterations,damping_factor);
         if(dump2file != nullptr)
             save_results(*result,dump2file);*/
         //direct access method
-        auto handler =  BwGraph->get_pagerank_handler(num_vertices);
+        auto handler =  GTX->get_pagerank_handler(num_vertices);
         handler.compute(num_iterations,damping_factor);
         if(dump2file != nullptr)
             save_results(*handler.get_result(),dump2file);
 
-        /*uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        /*uint64_t max_vertex_id = GTX->get_max_allocated_vid();
         // Run the PageRank algorithm
         unique_ptr<double[]> ptr_result = do_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
         //unique_ptr<double[]> ptr_result = do_sstatic_pagerank(transaction, num_vertices, max_vertex_id, num_iterations, damping_factor, timeout);
@@ -1608,7 +1608,7 @@ more consistent performance for undirected graphs.
 // direction, so we use a min-max swap such that lower component IDs propagate
 // independent of the edge's direction.
 /*
- * Libin: bwgraph read-txn not thread safe, so these analytical functions can only be done in read-only environment
+ * Libin: gtx read-txn not thread safe, so these analytical functions can only be done in read-only environment
  */
     static
     unique_ptr<uint64_t[]> do_wcc(gt::SharedROTransaction& transaction, uint64_t max_vertex_id, utility::TimeoutService& timer) {
@@ -1714,11 +1714,11 @@ more consistent performance for undirected graphs.
         std::cout<<"total vid sum is "<<total_vid_sum<<std::endl;
         std::cout<<"total weight is "<<total_weight<<std::endl;
     }
-    void BwGraphDriver::wcc(const char* dump2file) {
+    void GTXDriver::wcc(const char* dump2file) {
         /*utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        auto transaction =BwGraph->begin_shared_read_only_transaction();
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        auto transaction =GTX->begin_shared_read_only_transaction();
+        uint64_t max_vertex_id = GTX->get_max_allocated_vid();
 
         // run wcc
         unique_ptr<uint64_t[]> ptr_components = do_wcc(transaction, max_vertex_id, timeout);
@@ -1732,8 +1732,8 @@ more consistent performance for undirected graphs.
         // store the results in the given file
         if(dump2file != nullptr)
             save_results(external_ids, dump2file);*/
-        auto transaction =BwGraph->begin_shared_read_only_transaction();
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        auto transaction =GTX->begin_shared_read_only_transaction();
+        uint64_t max_vertex_id = GTX->get_max_allocated_vid();
         do_weighted_scan(transaction,max_vertex_id);
     }
 /*****************************************************************************
@@ -1841,9 +1841,9 @@ more consistent performance for undirected graphs.
         std::cout<<"total vid sum is "<<total_vid_sum<<std::endl;
     }
     
-    void BwGraphDriver::generate_two_hops_neighbor_candidates(std::vector<uint64_t>&vertices){
+    void GTXDriver::generate_two_hops_neighbor_candidates(std::vector<uint64_t>&vertices){
         vertices.resize(two_hop_neighbor_size);
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        uint64_t max_vertex_id = GTX->get_max_allocated_vid();
         std::unordered_set<uint64_t> unique_vertices;
         for(uint64_t i=0; i<two_hop_neighbor_size;i++){
             uint64_t vid = rand()%max_vertex_id+1;
@@ -1855,33 +1855,33 @@ more consistent performance for undirected graphs.
             }
         }
     }
-    void BwGraphDriver::one_hop_neighbors(std::vector<uint64_t>&vertices){
-        auto handler = BwGraph->get_one_hop_neighbors_handler();
+    void GTXDriver::one_hop_neighbors(std::vector<uint64_t>&vertices){
+        auto handler = GTX->get_one_hop_neighbors_handler();
         handler.compute(vertices);
     }
 
-    void BwGraphDriver::two_hop_neighbors(std::vector<uint64_t>&vertices){
-        auto handler = BwGraph->get_two_hop_neighbors_handler();
+    void GTXDriver::two_hop_neighbors(std::vector<uint64_t>&vertices){
+        auto handler = GTX->get_two_hop_neighbors_handler();
         handler.compute(vertices);
     }
     //todo:: fix iterator
-    void BwGraphDriver::cdlp(uint64_t max_iterations, const char* dump2file) {
+    void GTXDriver::cdlp(uint64_t max_iterations, const char* dump2file) {
          /*std::vector<uint64_t> vertices(two_hop_neighbor_size);
          std::unordered_set<uint64_t> unique_vertices;
          for(uint64_t i=0; i<two_hop_neighbor_size; i++){
             vertices[i]= rand()%max_vertex_id+1;
          }
-         auto handler = BwGraph->get_two_hop_neighbors_handler();
+         auto handler = GTX->get_two_hop_neighbors_handler();
          handler.compute(vertices);*/
-        /*auto transaction =BwGraph->begin_shared_read_only_transaction();
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        /*auto transaction =GTX->begin_shared_read_only_transaction();
+        uint64_t max_vertex_id = GTX->get_max_allocated_vid();
         do_topology_scan(transaction,max_vertex_id);*/
      /*   if(m_is_directed) { ERROR("This implementation of the CDLP does not support directed graphs"); }
 
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        auto transaction =BwGraph->begin_shared_read_only_transaction();
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        auto transaction =GTX->begin_shared_read_only_transaction();
+        uint64_t max_vertex_id = GTX->get_max_allocated_vid();
 
         // Run the CDLP algorithm
         unique_ptr<uint64_t[]> labels = do_cdlp(transaction, max_vertex_id, is_directed(), max_iterations, timeout);
@@ -1996,13 +1996,13 @@ more consistent performance for undirected graphs.
 
         return ptr_lcc;
     }
-    void BwGraphDriver::lcc(const char* dump2file) {
+    void GTXDriver::lcc(const char* dump2file) {
         if(m_is_directed) { ERROR("Implementation of LCC supports only undirected graphs"); }
 
         utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        gt::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        gt::SharedROTransaction transaction = GTX->begin_shared_read_only_transaction();
+        uint64_t max_vertex_id = GTX->get_max_allocated_vid();
 
         // Run the LCC algorithm
         unique_ptr<double[]> scores = do_lcc_undirected(transaction, max_vertex_id, timeout);
@@ -2246,12 +2246,12 @@ more consistent performance for undirected graphs.
         return dist;
     }
 
-    void BwGraphDriver::sssp(uint64_t source_vertex_id, const char* dump2file) {
+    void GTXDriver::sssp(uint64_t source_vertex_id, const char* dump2file) {
         //std::cout<<"sssp running"<<std::endl;
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        uint64_t max_vertex_id = GTX->get_max_allocated_vid();
         uint64_t root = ext2int(source_vertex_id);
         //uint64_t root = 128;
-       auto handler = BwGraph->get_sssp_handler(max_vertex_id);
+       auto handler = GTX->get_sssp_handler(max_vertex_id);
         double delta = 2.0;
         //std::cout<<"before entering compute"<<std::endl;
         handler.compute(root,delta);
@@ -2260,9 +2260,9 @@ more consistent performance for undirected graphs.
         //std::cout<<"sssp ran"<<std::endl;
        /*utility::TimeoutService timeout { m_timeout };
         Timer timer; timer.start();
-        gt::SharedROTransaction transaction = BwGraph->begin_shared_read_only_transaction();
+        gt::SharedROTransaction transaction = GTX->begin_shared_read_only_transaction();
         uint64_t num_edges = m_num_edges;
-        uint64_t max_vertex_id = BwGraph->get_max_allocated_vid();
+        uint64_t max_vertex_id = GTX->get_max_allocated_vid();
         uint64_t root = ext2int(source_vertex_id);
 
         // Run the SSSP algorithm

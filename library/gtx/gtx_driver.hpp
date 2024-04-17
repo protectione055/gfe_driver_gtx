@@ -10,7 +10,7 @@
 #include "../interface.hpp"
 #include "../../graph/edge.hpp"
 #include <tbb/enumerable_thread_specific.h>//to count the time
-#define BWGRAPH_SET_THREAD_NUM true
+#define GTX_SET_THREAD_NUM true
 namespace gfe::library {
 #define COUT_DEBUG_FORCE(msg) { std::scoped_lock<std::mutex> lock{::gfe::_log_mutex}; std::cout << "[TeseoDriver::" << __FUNCTION__ << "] " << msg << std::endl; }
 #if defined(DEBUG)
@@ -18,13 +18,13 @@ namespace gfe::library {
 #else
 #define COUT_DEBUG(msg)
 #endif
-    class BwGraphDriver: public virtual UpdateInterface, public virtual GraphalyticsInterface {
-        BwGraphDriver(const BwGraphDriver&)= delete;
-        BwGraphDriver& operator=(const BwGraphDriver&)= delete;
+    class GTXDriver: public virtual UpdateInterface, public virtual GraphalyticsInterface {
+        GTXDriver(const GTXDriver&)= delete;
+        GTXDriver& operator=(const GTXDriver&)= delete;
 
     protected:
-        void* m_pImpl; // pointer to the BwGraph handle
-        void* m_pHashMap; // pointer to the TBB HashMap to translate the vertex identifiers into the dense IDs for bwgraph
+        void* m_pImpl; // pointer to the GTX handle
+        void* m_pHashMap; // pointer to the TBB HashMap to translate the vertex identifiers into the dense IDs for gtx
         const bool m_is_directed; // whether the underlying graph is directed or undirected
         const bool m_read_only; // whether to used read only transactions for graphalytics
         std::atomic<uint64_t> m_num_vertices {0}; // keep track of the total number of vertices
@@ -51,7 +51,7 @@ namespace gfe::library {
         void save_results(const std::vector<std::pair<uint64_t, T>>& result, const char* dump2file);
         
     public:
-        BwGraphDriver(bool is_directed, bool read_only = true);
+        GTXDriver(bool is_directed, bool read_only = true);
 
         virtual void set_worker_thread_num(uint64_t new_num);
         virtual void on_edge_writes_finish();
@@ -67,7 +67,7 @@ namespace gfe::library {
         virtual void configure_distinct_reader_and_writer_threads(uint64_t reader_num, uint64_t writer_num);
         virtual void mixed_workload_finish_loading();
 
-        virtual ~BwGraphDriver();
+        virtual ~GTXDriver();
 
         virtual uint64_t num_edges() const;
 
@@ -119,7 +119,7 @@ namespace gfe::library {
     */
         virtual bool add_edge_v2(gfe::graph::WeightedEdge e);
         /**
-         * asme as v2 for bwgraph
+         * asme as v2 for gtx
          * @param e
          * @return
          */
@@ -141,7 +141,7 @@ namespace gfe::library {
         * Retrieve the opaque objects for the internal LiveGraph & Vertex Dictionary handles.
         * For Debugging & Testing only
         */
-        void* bwgraph();
+        void* gtx();
         void* vertex_dictionary(); // tbb::concurrent_hash_map<uint64_t, lg::vertex_t>
 
         /**

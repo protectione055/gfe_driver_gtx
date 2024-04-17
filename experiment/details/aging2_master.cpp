@@ -276,7 +276,7 @@ namespace gfe::experiment::details {
         m_parameters.m_library->build(); // flush last changes
         m_parameters.m_library->updates_stop();
         timer.stop();
-#if HAVE_BWGRAPH
+#if HAVE_GTX
         //m_parameters.m_library->on_edge_writes_finish();
 #endif
      //   LOG("[Aging2] Experiment completed!");
