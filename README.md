@@ -4,11 +4,11 @@ Our version of GFE_Driver is developed on top of the original GFE_Driver (https:
 GFE Driver
 ---
 
-The GFE (Graph Framework Evaluation) Driver is the program used to run the experiments in "Bw-Graph: A  Write-Optimized Lock-free Graph System with Transactional Support", measuring the throughput of updates in libraries supporting structural dynamic graphs and the completion times of 
+The GFE (Graph Framework Evaluation) Driver is the program used to run the experiments in "GTX: A  Write-Optimized Latch-free Graph Data System with Transactional Support", measuring the throughput of updates in libraries supporting structural dynamic graphs and the completion times of 
 the [Graphalytics kernels](https://github.com/ldbc/ldbc_graphalytics) concurrently. 
-The driver supports the following systems: [Bw-Graph](https://anonymous.4open.science/r/GTX_v2-B9AC/README.md), [Sortledton](https://gitlab.db.in.tum.de/per.fuchs/sortledton), [Teseo](https://github.com/cwida/teseo), 
+The driver supports the following systems: [GTX](https://github.com/Jiboxiake/GTX), [Sortledton](https://gitlab.db.in.tum.de/per.fuchs/sortledton), [Teseo](https://github.com/cwida/teseo), 
 [LLAMA](https://github.com/goatdb/llama), [GraphOne](https://github.com/the-data-lab/GraphOne), 
-[Stinger](http://stingergraph.com/) and [LiveGraph](https://github.com/thu-pacman/LiveGraph-Binary) while we ran our experiments only for systems that support concurrent reads and writes under transactions (Bw-Graph, Sortledton, Teseo, and LiveGraph).
+[Stinger](http://stingergraph.com/) and [LiveGraph](https://github.com/thu-pacman/LiveGraph-Binary) while we ran our experiments only for systems that support concurrent reads and writes under transactions (GTX, Sortledton, Teseo, and LiveGraph).
 It can run four kinds of experiments: insert all edges in a random permuted order or timestamp-based order from an input graph, execute the updates specified by a [graphlog file](https://github.com/whatsthecraic/graphlog), run the kernels of the Graphalytics suite: BFS, PageRank (PR), weighted shortest paths (SSSP), and concurrently execute updates and graph analytics.  
 In our paper we reported all insert experiments, all update experiments, and read-write mixed workload experiment. We also ran Graphalytics experiment but due to space we did not present the results in our papaer.
 ### Build 
@@ -28,7 +28,7 @@ Clone the repository.
 Initialise the sources and the configure script by:
 
 ```
-cd gfe_driver_bw
+cd gfe_driver_gtx
 git submodule update --init
 mkdir build && cd build
 autoreconf -iv ..
@@ -85,13 +85,13 @@ mkdir build && cd build
 ../configure --enable-optimize --disable-debug --with-sortledton=/path/to/microbenchmark/build   
 ```
 
-#### Bw-Graph
-Currently we use the version on Anonymous GitHub at `https://anonymous.4open.science/r/GTX_v2-B9AC/README.md`. 
-Follow the instruction in REAME to build Bw-Graph library. After the library has been built, configure the driver with:
+#### GTX
+Currently we use the branch 'master' from 'https://github.com/Jiboxiake/GTX' .
+Follow the instruction in REAME to build GTX. After GTX has been built, configure the driver with:
 ```
 mkdir build && cd build
-../configure --enable-optimize --disable-debug --with-gtx=/path/to/Bw-Graph/build
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/Bw-Graph/build
+../configure --enable-optimize --disable-debug --with-gtx=/path/to/GTX/build
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/GTX/build
 export LD_LIBRARY_PATH 
 ```
 
@@ -154,7 +154,7 @@ Type `./gfe_driver -h` for the full list of options and for the libraries that c
 in the library codes (e.g. teseo.**6**, stinger**3**) are unrelated to the versions of the systems evaluated, they were only used
 internally for development purposes.
 
-The database `output_results.sqlite3` will contain the final results. Refer to [this repository](https://github.com/whatsthecraic/gfe_notebooks) to see how to load and inspect the data within Jupyter notebooks. In our paper  "Bw-Graph: A  Write-Optimized Lock-free Graph System with Transactional Support", we did not use the notebook but generated the figures directly from the experiment output.
+The database `output_results.sqlite3` will contain the final results. Refer to [this repository](https://github.com/whatsthecraic/gfe_notebooks) to see how to load and inspect the data within Jupyter notebooks. In our paper  "GTX: A  Write-Optimized Latch-free Graph Data System with Transactional Support", we did not use the notebook but generated the figures directly from the experiment output.
 All scripts of running the experiments mentioned in the paper can be found at [/scripts/] . We also implemented a mixed workload of updates and transactional single edge reads but did not include it in the paper. It is implemented as a variance of the update experiment and can be found at [/experiment/details/].
 
 
