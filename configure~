@@ -694,7 +694,7 @@ enable_warnings
 enable_optimize
 enable_assert
 with_teseo
-with_bwgraph
+with_gtx
 with_stinger
 with_llama
 with_graphone
@@ -1348,7 +1348,7 @@ Optional Features and Packages:
                           are: yes, no, auto. [Default: auto]
   --with-teseo[=ARG]      Enable the support to Teseo. The argument needs to
                           be the path where the library has been built.
-  --with-bwgraph[=ARG]    Enable the support to BwGraph. The argument needs to
+  --with-gtx[=ARG]    Enable the support to GTX. The argument needs to
                           be the path where the library has been built.
   --with-stinger[=ARG]    Link with the (externally built) Stinger library.
                           The argument needs to be the path where stinger is
@@ -7090,22 +7090,22 @@ printf "%s\n" "$as_me: Teseo support enabled" >&6;}
 fi
 
 #############################################################################
-# Support for the BwGraph
+# Support for the GTX
 # Usage:
-# --with-bwgraph=/path/to/bwgraph/build
+# --with-gtx=/path/to/gtx/build
 #
 
 
-# Check whether --with-bwgraph was given.
-if test ${with_bwgraph+y}
+# Check whether --with-gtx was given.
+if test ${with_gtx+y}
 then :
-  withval=$with_bwgraph;
+  withval=$with_gtx;
 fi
 
 
-if ( test x"${with_bwgraph}" != x"" && test x"${with_bwgraph}" != "no" ); then
-    if( test x"${with_bwgraph}" == x"yes" ); then
-        as_fn_error $? "\"the full path to the BwGraph build needs to be specified, e.g. --with-bwgraph=/path/to/bwgraph/build\"" "$LINENO" 5;
+if ( test x"${with_gtx}" != x"" && test x"${with_gtx}" != "no" ); then
+    if( test x"${with_gtx}" == x"yes" ); then
+        as_fn_error $? "\"the full path to the GTX build needs to be specified, e.g. --with-gtx=/path/to/gtx/build\"" "$LINENO" 5;
     fi
 
 
@@ -7188,19 +7188,19 @@ fi
 	fi
 
 
-    path_bwgraph=$(realpath "${with_bwgraph}")
-    #path_bwgraph_library="${path_bwgraph}/libbwgraph.so"
-    path_bwgraph_library="${path_bwgraph}/libgtx.so"
-    as_ac_File=`printf "%s\n" "ac_cv_file_${path_bwgraph_library}" | $as_tr_sh`
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for ${path_bwgraph_library}" >&5
-printf %s "checking for ${path_bwgraph_library}... " >&6; }
+    path_gtx=$(realpath "${with_gtx}")
+    #path_gtx_library="${path_gtx}/libgtx.so"
+    path_gtx_library="${path_gtx}/libgtx.so"
+    as_ac_File=`printf "%s\n" "ac_cv_file_${path_gtx_library}" | $as_tr_sh`
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for ${path_gtx_library}" >&5
+printf %s "checking for ${path_gtx_library}... " >&6; }
 if eval test \${$as_ac_File+y}
 then :
   printf %s "(cached) " >&6
 else $as_nop
   test "$cross_compiling" = yes &&
   as_fn_error $? "cannot check for file existence when cross compiling" "$LINENO" 5
-if test -r "${path_bwgraph_library}"; then
+if test -r "${path_gtx_library}"; then
   eval "$as_ac_File=yes"
 else
   eval "$as_ac_File=no"
@@ -7213,21 +7213,21 @@ if eval test \"x\$"$as_ac_File"\" = x"yes"
 then :
 
 else $as_nop
-   as_fn_error $? "file not found: ${path_bwgraph_library}" "$LINENO" 5
+   as_fn_error $? "file not found: ${path_gtx_library}" "$LINENO" 5
 fi
 
 
-    path_bwgraph_makefile="${path_bwgraph}/Makefile"
-    as_ac_File=`printf "%s\n" "ac_cv_file_${path_bwgraph_makefile}" | $as_tr_sh`
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for ${path_bwgraph_makefile}" >&5
-printf %s "checking for ${path_bwgraph_makefile}... " >&6; }
+    path_gtx_makefile="${path_gtx}/Makefile"
+    as_ac_File=`printf "%s\n" "ac_cv_file_${path_gtx_makefile}" | $as_tr_sh`
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for ${path_gtx_makefile}" >&5
+printf %s "checking for ${path_gtx_makefile}... " >&6; }
 if eval test \${$as_ac_File+y}
 then :
   printf %s "(cached) " >&6
 else $as_nop
   test "$cross_compiling" = yes &&
   as_fn_error $? "cannot check for file existence when cross compiling" "$LINENO" 5
-if test -r "${path_bwgraph_makefile}"; then
+if test -r "${path_gtx_makefile}"; then
   eval "$as_ac_File=yes"
 else
   eval "$as_ac_File=no"
@@ -7240,21 +7240,21 @@ if eval test \"x\$"$as_ac_File"\" = x"yes"
 then :
 
 else $as_nop
-   as_fn_error $? "\"file not found: ${path_bwgraph_makefile}\"" "$LINENO" 5
+   as_fn_error $? "\"file not found: ${path_gtx_makefile}\"" "$LINENO" 5
 fi
 
 
-    path_bwgraph_includedir=$(realpath "${path_bwgraph}/../")
-    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: BwGraph include path: ${path_bwgraph_includedir}" >&5
-printf "%s\n" "$as_me: BwGraph include path: ${path_bwgraph_includedir}" >&6;}
+    path_gtx_includedir=$(realpath "${path_gtx}/../")
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: GTX include path: ${path_gtx_includedir}" >&5
+printf "%s\n" "$as_me: GTX include path: ${path_gtx_includedir}" >&6;}
 
-    as_fn_append CPPFLAGS " -I${path_bwgraph_includedir} -I${path_bwgraph}/include"
-    as_fn_append CPPFLAGS " -I${path_bwgraph_includedir}/bind -I${path_bwgraph_includedir}/core -I${path_bwgraph}/include"
-    # TODO clean up include structure in bwgraph
-    #AS_VAR_SET([LIBS], ["-L${path_bwgraph} -lbwgraph ${LIBS}"])
-    LIBS="-L${path_bwgraph} -lgtx ${LIBS}"
+    as_fn_append CPPFLAGS " -I${path_gtx_includedir} -I${path_gtx}/include"
+    as_fn_append CPPFLAGS " -I${path_gtx_includedir}/bind -I${path_gtx_includedir}/core -I${path_gtx}/include"
+    # TODO clean up include structure in gtx
+    #AS_VAR_SET([LIBS], ["-L${path_gtx} -lgtx ${LIBS}"])
+    LIBS="-L${path_gtx} -lgtx ${LIBS}"
 
-    # Try to compile a program with BwGraph
+    # Try to compile a program with GTX
     cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -7279,16 +7279,16 @@ else $as_nop
 
         { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
 printf "%s\n" "$as_me: error: in \`$ac_pwd':" >&2;}
-as_fn_error $? "unable to compile and link an executable with BwGraph
+as_fn_error $? "unable to compile and link an executable with GTX
 See \`config.log' for more details" "$LINENO" 5; }
 
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam \
     conftest$ac_exeext conftest.$ac_ext
 
-    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: BwGraph support enabled" >&5
-printf "%s\n" "$as_me: BwGraph support enabled" >&6;}
-    as_fn_append CPPFLAGS " -DHAVE_BWGRAPH"
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: GTX support enabled" >&5
+printf "%s\n" "$as_me: GTX support enabled" >&6;}
+    as_fn_append CPPFLAGS " -DHAVE_GTX"
 fi
 
 #############################################################################
