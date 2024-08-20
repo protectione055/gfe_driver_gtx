@@ -293,6 +293,47 @@ if ( test x"${with_teseo}" != x"" && test x"${with_teseo}" != "no" ); then
 fi
 
 #############################################################################
+# Support for the AGE
+# Usage:
+# --with-age=/path/to/AGE/build
+#
+
+AC_ARG_WITH([AGE], [AS_HELP_STRING([--with-age@<:@=ARG@:>@], [
+    Enable the support to Apache AGE. The argument needs to be the path where the library has been built.
+])], [])
+
+if ( test x"${with_age}" != x"" && test x"${with_age}" != "no" ); then
+    if( test x"${with_age}" != x"yes" ); then
+        AC_MSG_ERROR(["Just say yes, Babe, e.g. --with-age=yes"]);
+    fi
+
+    AS_VAR_APPEND([LDFLAGS], ["-L/usr/lib/x86_64-linux-gnu"])
+    AS_VAR_APPEND([CPPFLAGS], ["$CPPFLAGS -I/usr/include"])
+
+    LIBS="$LIBS -lpqxx"
+    
+    AC_LANG_PUSH([C++])
+    AC_LINK_IFELSE(
+    [AC_LANG_PROGRAM([#include <pqxx/pqxx>], [pqxx::connection conn;])],
+    [have_pqxx=yes],
+    [have_pqxx=no])
+    AC_LANG_POP([C++])
+    if test "x$have_pqxx" != "xyes"; then
+        AC_MSG_ERROR([libpqxx not found])
+    fi
+    
+    AC_CHECK_HEADERS([pqxx/pqxx], [have_pqxx_header=yes], [AC_MSG_ERROR([libpqxx headers not found])])
+    if test "x$have_pqxx_header" != "xyes"; then
+        AC_MSG_ERROR([pqxx/pqxx header not found.])
+    fi
+
+
+    AC_MSG_NOTICE([AGE support enabled])
+    AS_VAR_APPEND([CPPFLAGS], [" -DHAVE_AGE"])
+fi
+
+
+#############################################################################
 # Support for the GTX
 # Usage:
 # --with-gtx=/path/to/GTX/build

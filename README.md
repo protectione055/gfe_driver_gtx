@@ -20,7 +20,7 @@ In our paper we reported all insert experiments, all update experiments, and rea
 - libnuma 2.0 +
 - [libpapi 5.5 +](http://icl.utk.edu/papi/)
 - [SQLite 3.27 +](https://sqlite.org)
-- Intel Threading Building Blocks 2 (version 2020.1-2)
+- Intel Threading Building Blocks 2 (version 2021.13.0, onetbb_2021)
 
 #### Configure
 Clone the repository.
@@ -89,6 +89,7 @@ mkdir build && cd build
 Currently we use the branch 'master' from 'https://github.com/Jiboxiake/GTX' .
 Follow the instruction in REAME to build GTX. After GTX has been built, configure the driver with:
 ```
+sudo apt-get install libpapi-dev
 mkdir build && cd build
 ../configure --enable-optimize --disable-debug --with-gtx=/path/to/GTX/build
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/GTX/build

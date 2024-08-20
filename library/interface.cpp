@@ -69,6 +69,10 @@
 #include "gtx/gtx_driver.hpp"
 #endif
 
+#if defined(HAVE_AGE)
+#include "apache-age/age_driver.hpp"
+#endif
+
 #if defined(HAVE_MICROBENCHMARKS)
 #include "microbenchmarks/microbenchmarks_driver.hpp"
 #endif
@@ -254,6 +258,12 @@ std::unique_ptr<Interface> generate_gtx_rw(bool directed_graph){ // read-write t
 }
 #endif
 
+#if defined(HAVE_AGE)
+std::unique_ptr<Interface> generate_age(bool directed_graph){
+    return unique_ptr<Interface>( new AGEDriver(directed_graph, /*read_only ? */ false));
+}
+#endif
+
 #if defined(HAVE_MICROBENCHMARKS)
 std::unique_ptr<Interface> generate_microbenchmarks(bool directed_graph) {
   auto& config = configuration();
@@ -435,6 +445,10 @@ vector<ImplementationManifest> implementations() {
     // v3 25/04/2021: Materialization step with a vector
     result.emplace_back("gtx_ro", "GTX, use read-only transactions for the Graphalytics kernels", &generate_gtx_ro);
     result.emplace_back("gtx_rw", "GTX, use read-write transactions for the Graphalytics kernels", &generate_gtx_rw);
+#endif
+
+#if defined(HAVE_AGE)
+    result.emplace_back("age", "AGE", &generate_age);
 #endif
 
 #if defined(HAVE_MICROBENCHMARKS)

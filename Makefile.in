@@ -113,6 +113,10 @@ ifneq (,$(findstring -DHAVE_GTX,${ALL_CPPFLAGS}))
 	sources += $(addprefix library/gtx/, gtx_driver.cpp)
 endif
 
+ifneq (,$(findstring -DHAVE_AGE,${ALL_CPPFLAGS}))
+	sources += $(addprefix library/apache-age/, age_driver.cpp)
+endif
+
 ifneq (,$(findstring -DHAVE_MICROBENCHMARKS,${ALL_CPPFLAGS}))
 	sources += $(addprefix library/microbenchmarks/, microbenchmarks_driver.cpp)
 endif
